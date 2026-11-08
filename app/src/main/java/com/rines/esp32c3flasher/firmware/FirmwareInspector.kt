@@ -1,6 +1,8 @@
 
 package com.rines.esp32c3flasher.firmware
 
+import java.security.MessageDigest
+
 data class FirmwareInfo(
     val fileName: String,
     val fileSize: Long,
@@ -15,51 +17,146 @@ object FirmwareInspector {
     private const val ESP_IMAGE_MAGIC = 0xE9
     private const val ESP32_C3_CHIP_ID = 5
     private const val HEADER_SIZE = 24
+    private const val SEGMENT_HEADER_SIZE = 8
+    private const val MAX_SEGMENTS = 16
+    private const val CHECKSUM_INIT = 0xEF
+    private const val SHA256_LENGTH = 32
 
     fun inspect(
         fileName: String,
         firmware: ByteArray
     ): FirmwareInfo {
 
-        if (firmware.isEmpty()) {
-            return invalid(fileName, firmware.size, "Firmware file is empty.")
-        }
-
         if (firmware.size < HEADER_SIZE) {
-            return invalid(fileName, firmware.size, "Firmware file is too small.")
+            return invalid(fileName, firmware, "Firmware file is too small.")
         }
 
-        val magic = firmware[0].toInt() and 0xFF
-
-        if (magic != ESP_IMAGE_MAGIC) {
-            return invalid(
-                fileName,
-                firmware.size,
-                "Invalid ESP image magic. Expected 0xE9."
-            )
+        if ((firmware[0].toInt() and 0xFF) != ESP_IMAGE_MAGIC) {
+            return invalid(fileName, firmware, "Invalid ESP image magic.")
         }
 
         val segmentCount = firmware[1].toInt() and 0xFF
 
-        if (segmentCount == 0 || segmentCount > 16) {
-            return invalid(
-                fileName,
-                firmware.size,
-                "Invalid firmware segment count."
-            )
+        if (segmentCount !in 1..MAX_SEGMENTS) {
+            return invalid(fileName, firmware, "Invalid segment count.")
         }
 
         val chipId = readUInt16LE(firmware, 12)
 
         if (chipId != ESP32_C3_CHIP_ID) {
             return FirmwareInfo(
-                fileName = fileName,
-                fileSize = firmware.size.toLong(),
-                isValid = false,
-                chipId = chipId,
-                segmentCount = segmentCount,
-                message = "This firmware is not identified as ESP32-C3 firmware."
+                fileName,
+                firmware.size.toLong(),
+                false,
+                chipId,
+                segmentCount,
+                "Firmware is not identified as ESP32-C3."
             )
+        }
+
+        val hashAppended =
+            (firmware[23].toInt() and 0xFF) == 1
+
+        var offset = HEADER_SIZE
+        var checksum = CHECKSUM_INIT
+
+        for (segment in 0 until segmentCount) {
+
+            if (offset + SEGMENT_HEADER_SIZE > firmware.size) {
+                return invalid(
+                    fileName,
+                    firmware,
+                    "Segment $segment header is incomplete.",
+                    chipId,
+                    segmentCount
+                )
+            }
+
+            val dataLength = readUInt32LE(
+                firmware,
+                offset + 4
+            )
+
+            offset += SEGMENT_HEADER_SIZE
+
+            if (dataLength > firmware.size - offset) {
+                return invalid(
+                    fileName,
+                    firmware,
+                    "Segment $segment exceeds firmware file size.",
+                    chipId,
+                    segmentCount
+                )
+            }
+
+            val end = offset + dataLength.toInt()
+
+            for (index in offset until end) {
+                checksum = checksum xor
+                    (firmware[index].toInt() and 0xFF)
+            }
+
+            offset = end
+        }
+
+        // ESP image checksum is placed at a 16-byte boundary.
+        val checksumOffset = ((offset + 15) / 16) * 16 - 1
+
+        if (checksumOffset >= firmware.size) {
+            return invalid(
+                fileName,
+                firmware,
+                "Firmware checksum is missing.",
+                chipId,
+                segmentCount
+            )
+        }
+
+        val storedChecksum =
+            firmware[checksumOffset].toInt() and 0xFF
+
+        if (storedChecksum != checksum) {
+            return invalid(
+                fileName,
+                firmware,
+                "Firmware checksum mismatch.",
+                chipId,
+                segmentCount
+            )
+        }
+
+        if (hashAppended) {
+            val hashStart = checksumOffset + 1
+            val hashEnd = hashStart + SHA256_LENGTH
+
+            if (hashEnd > firmware.size) {
+                return invalid(
+                    fileName,
+                    firmware,
+                    "Appended SHA-256 hash is incomplete.",
+                    chipId,
+                    segmentCount
+                )
+            }
+
+            val calculatedHash = MessageDigest
+                .getInstance("SHA-256")
+                .digest(firmware.copyOfRange(0, hashStart))
+
+            val storedHash = firmware.copyOfRange(
+                hashStart,
+                hashEnd
+            )
+
+            if (!calculatedHash.contentEquals(storedHash)) {
+                return invalid(
+                    fileName,
+                    firmware,
+                    "Firmware SHA-256 hash mismatch.",
+                    chipId,
+                    segmentCount
+                )
+            }
         }
 
         return FirmwareInfo(
@@ -68,7 +165,7 @@ object FirmwareInspector {
             isValid = true,
             chipId = chipId,
             segmentCount = segmentCount,
-            message = "ESP32-C3 firmware image header is valid."
+            message = "ESP32-C3 firmware structure and checksum are valid."
         )
     }
 
@@ -80,17 +177,29 @@ object FirmwareInspector {
             ((data[offset + 1].toInt() and 0xFF) shl 8)
     }
 
+    private fun readUInt32LE(
+        data: ByteArray,
+        offset: Int
+    ): Long {
+        return (data[offset].toLong() and 0xFF) or
+            ((data[offset + 1].toLong() and 0xFF) shl 8) or
+            ((data[offset + 2].toLong() and 0xFF) shl 16) or
+            ((data[offset + 3].toLong() and 0xFF) shl 24)
+    }
+
     private fun invalid(
         fileName: String,
-        size: Int,
-        message: String
+        firmware: ByteArray,
+        message: String,
+        chipId: Int? = null,
+        segmentCount: Int? = null
     ): FirmwareInfo {
         return FirmwareInfo(
             fileName = fileName,
-            fileSize = size.toLong(),
+            fileSize = firmware.size.toLong(),
             isValid = false,
-            chipId = null,
-            segmentCount = null,
+            chipId = chipId,
+            segmentCount = segmentCount,
             message = message
         )
     }
