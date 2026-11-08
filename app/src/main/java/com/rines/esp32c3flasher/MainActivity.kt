@@ -25,7 +25,9 @@ import com.rines.esp32c3flasher.update.GitHubUpdateChecker
 import com.rines.esp32c3flasher.update.ReleaseInfo
 import com.rines.esp32c3flasher.update.UpdateSettings
 import com.rines.esp32c3flasher.update.VersionComparator
+import com.rines.esp32c3flasher.update.ApkInstaller
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,6 +84,19 @@ fun RinesFlasherScreen(
         mutableStateOf<ReleaseInfo?>(null)
     }
 
+    // APK DOWNLOAD STATE
+    var isDownloadingUpdate by remember {
+        mutableStateOf(false)
+    }
+
+    var downloadProgress by remember {
+        mutableIntStateOf(0)
+    }
+
+    var downloadedApk by remember {
+        mutableStateOf<File?>(null)
+    }
+
     // USB PERMISSION MANAGER
     DisposableEffect(context) {
         val manager = UsbPermissionManager(context) { device, granted ->
@@ -136,12 +151,14 @@ fun RinesFlasherScreen(
 
     // CHECK GITHUB RELEASE
     fun checkForUpdates() {
-        if (isCheckingUpdate) return
+        if (isCheckingUpdate || isDownloadingUpdate) return
 
         scope.launch {
             isCheckingUpdate = true
             updateStatus = "Checking GitHub Releases..."
             latestRelease = null
+            downloadedApk = null
+            downloadProgress = 0
 
             try {
                 val release = GitHubUpdateChecker.fetchLatestRelease()
@@ -175,6 +192,70 @@ fun RinesFlasherScreen(
             } finally {
                 isCheckingUpdate = false
             }
+        }
+    }
+
+    // DOWNLOAD APK UPDATE
+    fun downloadUpdate() {
+        val apkUrl = latestRelease?.apkUrl
+
+        if (apkUrl.isNullOrBlank()) {
+            updateStatus = "No APK download link found."
+            return
+        }
+
+        if (isDownloadingUpdate) return
+
+        scope.launch {
+            isDownloadingUpdate = true
+            downloadProgress = 0
+            downloadedApk = null
+            updateStatus = "Downloading update..."
+
+            try {
+                val apkFile = ApkInstaller.downloadApk(
+                    context = context,
+                    apkUrl = apkUrl,
+                    onProgress = { progress ->
+                        downloadProgress = progress
+                    }
+                )
+
+                downloadedApk = apkFile
+                downloadProgress = 100
+                updateStatus = "APK downloaded successfully. Ready to install."
+            } catch (e: Exception) {
+                downloadedApk = null
+                updateStatus = "Download failed: ${
+                    e.message ?: "Unknown error"
+                }"
+            } finally {
+                isDownloadingUpdate = false
+            }
+        }
+    }
+
+    // INSTALL DOWNLOADED APK
+    fun installUpdate() {
+        val apkFile = downloadedApk
+
+        if (apkFile == null || !apkFile.exists()) {
+            updateStatus = "Downloaded APK not found. Download again."
+            downloadedApk = null
+            return
+        }
+
+        try {
+            ApkInstaller.installApk(
+                context = context,
+                apkFile = apkFile
+            )
+
+            updateStatus = "Opening Android installer..."
+        } catch (e: Exception) {
+            updateStatus = "Unable to open installer: ${
+                e.message ?: "Unknown error"
+            }"
         }
     }
 
@@ -441,7 +522,7 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // SETTINGS AND UPDATE CHECKER
+            // SETTINGS AND IN-APP UPDATES
             item {
                 UpdateSettings(
                     installedVersion = installedVersion,
@@ -449,6 +530,21 @@ fun RinesFlasherScreen(
                     isChecking = isCheckingUpdate,
                     onCheckUpdates = {
                         checkForUpdates()
+                    },
+                    latestVersion = latestRelease?.tagName?.takeIf {
+                        VersionComparator.isUpdateAvailable(
+                            installedVersion,
+                            it
+                        ) && latestRelease?.apkUrl != null
+                    },
+                    isDownloading = isDownloadingUpdate,
+                    downloadProgress = downloadProgress,
+                    apkDownloaded = downloadedApk != null,
+                    onDownloadUpdate = {
+                        downloadUpdate()
+                    },
+                    onInstallUpdate = {
+                        installUpdate()
                     }
                 )
 
