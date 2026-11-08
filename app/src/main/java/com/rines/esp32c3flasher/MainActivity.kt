@@ -1,8 +1,10 @@
 
 package com.rines.esp32c3flasher
 
+import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -19,6 +21,11 @@ import com.rines.esp32c3flasher.usb.UsbDeviceInfo
 import com.rines.esp32c3flasher.usb.UsbDeviceScanner
 import com.rines.esp32c3flasher.usb.UsbPermissionManager
 import com.rines.esp32c3flasher.usb.UsbDeviceReceiver
+import com.rines.esp32c3flasher.update.GitHubUpdateChecker
+import com.rines.esp32c3flasher.update.ReleaseInfo
+import com.rines.esp32c3flasher.update.UpdateSettings
+import com.rines.esp32c3flasher.update.VersionComparator
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +46,7 @@ fun RinesFlasherScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by vm.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
 
     var devices by remember { mutableStateOf(emptyList<UsbDeviceInfo>()) }
     var eraseSize by remember { mutableStateOf("4194304") }
@@ -49,7 +57,32 @@ fun RinesFlasherScreen(
         mutableStateOf<UsbPermissionManager?>(null)
     }
 
-    // USB permission manager
+    // APP VERSION
+    val installedVersion = remember {
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager
+                .getPackageInfo(context.packageName, 0)
+                .versionName ?: "Unknown"
+        } catch (_: Exception) {
+            "Unknown"
+        }
+    }
+
+    // UPDATE CHECKER STATE
+    var updateStatus by remember {
+        mutableStateOf("Tap Check for Updates to check for a new version.")
+    }
+
+    var isCheckingUpdate by remember {
+        mutableStateOf(false)
+    }
+
+    var latestRelease by remember {
+        mutableStateOf<ReleaseInfo?>(null)
+    }
+
+    // USB PERMISSION MANAGER
     DisposableEffect(context) {
         val manager = UsbPermissionManager(context) { device, granted ->
             if (granted && device != null) {
@@ -66,12 +99,12 @@ fun RinesFlasherScreen(
         }
     }
 
-    // Initial USB scan
+    // INITIAL USB SCAN
     LaunchedEffect(Unit) {
         devices = UsbDeviceScanner.scan(context)
     }
 
-    // Automatic USB attach/detach detection
+    // AUTOMATIC USB ATTACH/DETACH DETECTION
     DisposableEffect(context) {
         val receiver = UsbDeviceReceiver {
             devices = UsbDeviceScanner.scan(context)
@@ -97,6 +130,50 @@ fun RinesFlasherScreen(
             try {
                 context.unregisterReceiver(receiver)
             } catch (_: IllegalArgumentException) {
+            }
+        }
+    }
+
+    // CHECK GITHUB RELEASE
+    fun checkForUpdates() {
+        if (isCheckingUpdate) return
+
+        scope.launch {
+            isCheckingUpdate = true
+            updateStatus = "Checking GitHub Releases..."
+            latestRelease = null
+
+            try {
+                val release = GitHubUpdateChecker.fetchLatestRelease()
+                latestRelease = release
+
+                val latestVersion = release.tagName
+
+                if (latestVersion.isBlank()) {
+                    updateStatus = "Unable to read latest version."
+                } else {
+                    val hasUpdate = VersionComparator.isUpdateAvailable(
+                        installedVersion = installedVersion,
+                        latestVersion = latestVersion
+                    )
+
+                    updateStatus = when {
+                        hasUpdate && release.apkUrl != null ->
+                            "Update available: ${release.tagName}"
+
+                        hasUpdate ->
+                            "New version found, but no APK was attached to the release."
+
+                        else ->
+                            "Your app is up to date. Installed: $installedVersion"
+                    }
+                }
+            } catch (e: Exception) {
+                updateStatus = "Update check failed: ${
+                    e.message ?: "Unknown error"
+                }"
+            } finally {
+                isCheckingUpdate = false
             }
         }
     }
@@ -360,6 +437,42 @@ fun RinesFlasherScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
+                    }
+                }
+            }
+
+            // SETTINGS AND UPDATE CHECKER
+            item {
+                UpdateSettings(
+                    installedVersion = installedVersion,
+                    updateStatus = updateStatus,
+                    isChecking = isCheckingUpdate,
+                    onCheckUpdates = {
+                        checkForUpdates()
+                    }
+                )
+
+                val release = latestRelease
+
+                if (release?.apkUrl != null &&
+                    VersionComparator.isUpdateAvailable(
+                        installedVersion,
+                        release.tagName
+                    )
+                ) {
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(release.releaseUrl)
+                            )
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Open GitHub Release")
                     }
                 }
             }
