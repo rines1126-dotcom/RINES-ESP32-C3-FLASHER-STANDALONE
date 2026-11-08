@@ -8,19 +8,25 @@ data class Esp32C3Response(
     val value: Long,
     val data: ByteArray
 ) {
+
+    companion object {
+        private const val ROM_STATUS_SIZE = 4
+    }
+
     val isResponse: Boolean
         get() = direction == Esp32C3Command.RESPONSE_DIRECTION
 
-    // ESP32-C3 ROM response uses four trailing status bytes.
+    // ESP32-C3 ROM response:
+    // [status, error, reserved, reserved]
     val status: Int?
-        get() = if (data.size >= 4) {
+        get() = if (data.size >= ROM_STATUS_SIZE) {
             data[data.size - 4].toInt() and 0xFF
         } else {
             null
         }
 
     val errorCode: Int?
-        get() = if (data.size >= 4) {
+        get() = if (data.size >= ROM_STATUS_SIZE) {
             data[data.size - 3].toInt() and 0xFF
         } else {
             null
@@ -29,36 +35,49 @@ data class Esp32C3Response(
     val isSuccessful: Boolean
         get() = isResponse && status == 0
 
-    fun describe(): String {
-        return buildString {
-            append("Command: 0x%02X".format(command))
-            append(", Length: $dataLength")
-            append(", Value: 0x%08X".format(value))
-            append(", Status: ${status ?: "Unknown"}")
-            append(", Error: ${errorCode ?: "Unknown"}")
-        }
+    fun describe(): String = buildString {
+        append("Command: 0x%02X".format(command))
+        append(", Length: $dataLength")
+        append(", Value: 0x%08X".format(value))
+        append(", Status: ${status ?: "Unknown"}")
+        append(", Error: ${errorCode ?: "Unknown"}")
     }
 }
 
 object Esp32C3ResponseParser {
 
     private const val HEADER_SIZE = 8
+    private const val MAX_DATA_LENGTH = 0xFFFF
 
     fun parse(packet: ByteArray): Esp32C3Response? {
-        if (packet.size < HEADER_SIZE) return null
+
+        if (packet.size < HEADER_SIZE) {
+            return null
+        }
 
         val direction = packet[0].toInt() and 0xFF
         val command = packet[1].toInt() and 0xFF
 
+        if (direction != Esp32C3Command.RESPONSE_DIRECTION) {
+            return null
+        }
+
         val dataLength =
             (packet[2].toInt() and 0xFF) or
-            ((packet[3].toInt() and 0xFF) shl 8)
+                ((packet[3].toInt() and 0xFF) shl 8)
+
+        if (dataLength > MAX_DATA_LENGTH) {
+            return null
+        }
 
         if (packet.size != HEADER_SIZE + dataLength) {
             return null
         }
 
-        val value = Esp32C3Command.readUInt32LE(packet, 4)
+        val value = Esp32C3Command.readUInt32LE(
+            packet,
+            4
+        )
 
         val data = packet.copyOfRange(
             HEADER_SIZE,
