@@ -10,9 +10,16 @@ class Esp32C3FlashInit(
     private val romClient: Esp32C3RomClient
 ) {
 
+    companion object {
+        private const val MAX_UINT32 = 0xFFFFFFFFL
+        private const val FLASH_BLOCK_SIZE = 65536L
+        private const val FLASH_SECTOR_SIZE = 4096L
+        private const val FLASH_PAGE_SIZE = 256L
+        private const val FLASH_STATUS_MASK = 0xFFFFL
+    }
+
     /**
      * Attaches the default SPI flash interface.
-     * ESP32-C3 ROM requires two zero-valued words.
      */
     fun attachFlash(): FlashInitResult {
 
@@ -38,14 +45,17 @@ class Esp32C3FlashInit(
     }
 
     /**
-     * Configures the SPI flash parameters.
-     * Flash capacity must come from actual chip detection.
+     * Configures SPI flash parameters.
+     * Capacity must be supplied by actual flash detection.
      */
     fun setFlashParameters(
         flashSizeBytes: Long
     ): FlashInitResult {
 
-        if (flashSizeBytes <= 0) {
+        if (
+            flashSizeBytes <= 0 ||
+            flashSizeBytes > MAX_UINT32
+        ) {
             return FlashInitResult(
                 false,
                 "Invalid flash capacity."
@@ -55,10 +65,10 @@ class Esp32C3FlashInit(
         val payload = byteArrayOf(
             *Esp32C3Command.intToBytesLE(0),
             *Esp32C3Command.intToBytesLE(flashSizeBytes),
-            *Esp32C3Command.intToBytesLE(65536),
-            *Esp32C3Command.intToBytesLE(4096),
-            *Esp32C3Command.intToBytesLE(256),
-            *Esp32C3Command.intToBytesLE(0xFFFF)
+            *Esp32C3Command.intToBytesLE(FLASH_BLOCK_SIZE),
+            *Esp32C3Command.intToBytesLE(FLASH_SECTOR_SIZE),
+            *Esp32C3Command.intToBytesLE(FLASH_PAGE_SIZE),
+            *Esp32C3Command.intToBytesLE(FLASH_STATUS_MASK)
         )
 
         val result = romClient.execute(
