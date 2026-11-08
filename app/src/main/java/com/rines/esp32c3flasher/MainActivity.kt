@@ -31,6 +31,7 @@ import com.rines.esp32c3flasher.ui.components.RinesSectionCard
 import com.rines.esp32c3flasher.ui.components.RinesStatusPill
 import com.rines.esp32c3flasher.ui.components.RinesPrimaryButton
 import com.rines.esp32c3flasher.ui.components.RinesOutlineButton
+import com.rines.esp32c3flasher.ui.components.FlashProgressCard
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -404,27 +405,13 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // FLASH PROGRESS
+            // NEW FLASH PROGRESS DASHBOARD
             item {
-                RinesSectionCard(
-                    title = "FLASH PROGRESS",
-                    subtitle = "Programming status"
-                ) {
-                    LinearProgressIndicator(
-                        progress = {
-                            state.progress / 100f
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Text(
-                        "${state.progress}%",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    Text(state.message)
-                }
+                FlashProgressCard(
+                    progress = state.progress,
+                    status = state.message,
+                    isBusy = state.isBusy
+                )
             }
 
             // FLASH LOGS
