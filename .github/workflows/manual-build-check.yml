@@ -1,7 +1,10 @@
-
-name: Manual Android Build Check
+name: Automatic Android Build Check
 
 on:
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
@@ -9,7 +12,7 @@ permissions:
 
 jobs:
   build-check:
-    name: Kotlin Compilation Check
+    name: Android Compilation Check
     runs-on: ubuntu-latest
 
     steps:
