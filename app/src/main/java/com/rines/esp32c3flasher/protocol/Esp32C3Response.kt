@@ -11,23 +11,23 @@ data class Esp32C3Response(
     val isResponse: Boolean
         get() = direction == Esp32C3Command.RESPONSE_DIRECTION
 
-    // ROM response status and error are the final two data bytes.
+    // ESP32-C3 ROM response uses four trailing status bytes.
     val status: Int?
-        get() = if (data.size >= 2) {
-            data[data.size - 2].toInt() and 0xFF
+        get() = if (data.size >= 4) {
+            data[data.size - 4].toInt() and 0xFF
         } else {
             null
         }
 
     val errorCode: Int?
-        get() = if (data.size >= 2) {
-            data[data.size - 1].toInt() and 0xFF
+        get() = if (data.size >= 4) {
+            data[data.size - 3].toInt() and 0xFF
         } else {
             null
         }
 
     val isSuccessful: Boolean
-        get() = isResponse && status == 0 && errorCode == 0
+        get() = isResponse && status == 0
 
     fun describe(): String {
         return buildString {
