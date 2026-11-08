@@ -21,22 +21,22 @@ class Esp32C3Sync(
     }
 
     /**
-     * Sends SYNC commands and waits for a valid ESP32-C3 response.
-     *
-     * Call this function from a background thread,
-     * not directly from the Android UI thread.
+     * Synchronizes with the ESP32-C3 ROM bootloader.
+     * Must run on a background thread.
      */
     fun synchronize(): SyncResult {
 
         if (!transport.isConnected) {
             return SyncResult(
-                success = false,
-                message = "USB device is not connected."
+                false,
+                "USB device is not connected."
             )
         }
 
         val decoder = SlipCodec.Decoder()
         val syncPacket = Esp32C3Command.buildSyncRequest()
+
+        var lastError = ""
 
         repeat(MAX_ATTEMPTS) { attempt ->
 
@@ -44,8 +44,8 @@ class Esp32C3Sync(
 
             if (!transport.write(syncPacket)) {
                 return SyncResult(
-                    success = false,
-                    message = "SYNC transmission failed: ${transport.lastError}"
+                    false,
+                    "SYNC transmission failed: ${transport.lastError}"
                 )
             }
 
@@ -59,22 +59,16 @@ class Esp32C3Sync(
                 val incoming = transport.read(
                     bufferSize = 512,
                     timeout = READ_TIMEOUT_MS
+                ) ?: return SyncResult(
+                    false,
+                    "USB communication error: ${transport.lastError}"
                 )
-
-                if (incoming == null) {
-                    return SyncResult(
-                        success = false,
-                        message = "USB communication error: ${transport.lastError}"
-                    )
-                }
 
                 if (incoming.isEmpty()) {
                     continue
                 }
 
-                val packets = decoder.feed(incoming)
-
-                for (packet in packets) {
+                for (packet in decoder.feed(incoming)) {
 
                     val response =
                         Esp32C3ResponseParser.parse(packet)
@@ -91,26 +85,27 @@ class Esp32C3Sync(
 
                     if (response.isSuccessful) {
                         return SyncResult(
-                            success = true,
-                            message = "ESP32-C3 synchronized successfully.",
-                            response = response
+                            true,
+                            "ESP32-C3 synchronized successfully.",
+                            response
                         )
                     }
 
-                    return SyncResult(
-                        success = false,
-                        message = "ESP32-C3 returned an error. " +
-                            response.describe(),
-                        response = response
-                    )
+                    lastError = response.describe()
                 }
             }
         }
 
-        return SyncResult(
-            success = false,
-            message = "No valid SYNC response after $MAX_ATTEMPTS attempts. " +
+        val message = if (lastError.isNotEmpty()) {
+            "SYNC failed after $MAX_ATTEMPTS attempts. Last response: $lastError"
+        } else {
+            "No valid SYNC response after $MAX_ATTEMPTS attempts. " +
                 "Check USB connection and bootloader mode."
+        }
+
+        return SyncResult(
+            false,
+            message
         )
     }
 }
