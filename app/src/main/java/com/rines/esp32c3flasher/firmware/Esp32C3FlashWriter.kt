@@ -1,3 +1,4 @@
+
 package com.rines.esp32c3flasher.firmware
 
 import com.rines.esp32c3flasher.protocol.Esp32C3Command
@@ -21,6 +22,9 @@ class Esp32C3FlashWriter(
         private const val FLASH_BEGIN_TIMEOUT = 30000L
         private const val FLASH_DATA_TIMEOUT = 10000L
         private const val FLASH_END_TIMEOUT = 5000L
+
+        private const val MAX_UINT32 = 0xFFFFFFFFL
+        private const val ADDRESS_SPACE_SIZE = 0x100000000L
     }
 
     fun writeFirmware(
@@ -37,25 +41,45 @@ class Esp32C3FlashWriter(
             )
         }
 
-        if (flashAddress < 0 || flashAddress % SECTOR_SIZE != 0L) {
+        if (
+            flashAddress < 0 ||
+            flashAddress > MAX_UINT32 ||
+            flashAddress % SECTOR_SIZE != 0L
+        ) {
             return FlashWriteResult(
                 false,
-                "Flash address must be non-negative and sector-aligned."
+                "Flash address must be a valid 32-bit, sector-aligned address."
             )
         }
 
         val firmwareSize = firmware.size
+        val firmwareSizeLong = firmwareSize.toLong()
+
         val blockCount =
-            (firmwareSize + BLOCK_SIZE - 1) / BLOCK_SIZE
+            (firmwareSizeLong + BLOCK_SIZE - 1L) / BLOCK_SIZE
 
         val eraseSize =
-            ((firmwareSize.toLong() + SECTOR_SIZE - 1) / SECTOR_SIZE) *
-                SECTOR_SIZE
+            ((firmwareSizeLong + SECTOR_SIZE - 1L) /
+                SECTOR_SIZE) * SECTOR_SIZE
 
-        if (flashAddress > 0xFFFFFFFFL - eraseSize) {
+        if (blockCount <= 0 || blockCount > MAX_UINT32) {
             return FlashWriteResult(
                 false,
-                "Flash address range is too large."
+                "Invalid firmware block count."
+            )
+        }
+
+        if (eraseSize <= 0 || eraseSize > MAX_UINT32) {
+            return FlashWriteResult(
+                false,
+                "Firmware erase size exceeds the supported 32-bit range."
+            )
+        }
+
+        if (eraseSize > ADDRESS_SPACE_SIZE - flashAddress) {
+            return FlashWriteResult(
+                false,
+                "Firmware exceeds the 32-bit flash address range."
             )
         }
 
@@ -63,7 +87,7 @@ class Esp32C3FlashWriter(
 
         val beginPayload = byteArrayOf(
             *Esp32C3Command.intToBytesLE(eraseSize),
-            *Esp32C3Command.intToBytesLE(blockCount.toLong()),
+            *Esp32C3Command.intToBytesLE(blockCount),
             *Esp32C3Command.intToBytesLE(BLOCK_SIZE.toLong()),
             *Esp32C3Command.intToBytesLE(flashAddress)
         )
@@ -85,9 +109,10 @@ class Esp32C3FlashWriter(
 
         var bytesWritten = 0
 
-        for (sequence in 0 until blockCount) {
+        for (sequence in 0L until blockCount) {
 
-            val sourceOffset = sequence * BLOCK_SIZE
+            val sourceOffset =
+                (sequence * BLOCK_SIZE).toInt()
 
             val actualLength = min(
                 BLOCK_SIZE,
@@ -107,7 +132,7 @@ class Esp32C3FlashWriter(
 
             val dataPayload = byteArrayOf(
                 *Esp32C3Command.intToBytesLE(BLOCK_SIZE.toLong()),
-                *Esp32C3Command.intToBytesLE(sequence.toLong()),
+                *Esp32C3Command.intToBytesLE(sequence),
                 *Esp32C3Command.intToBytesLE(0),
                 *Esp32C3Command.intToBytesLE(0),
                 *block
@@ -134,7 +159,8 @@ class Esp32C3FlashWriter(
             bytesWritten += actualLength
 
             val progress =
-                ((bytesWritten.toLong() * 100) / firmwareSize).toInt()
+                ((bytesWritten.toLong() * 100L) /
+                    firmwareSizeLong).toInt()
 
             progressCallback(
                 progress,
@@ -142,7 +168,7 @@ class Esp32C3FlashWriter(
             )
         }
 
-        // ESP ROM FLASH_END requires exactly one 32-bit word.
+        // One 32-bit word:
         // 0 = reboot, 1 = remain in download mode.
         val endPayload = Esp32C3Command.intToBytesLE(
             if (reboot) 0 else 1
