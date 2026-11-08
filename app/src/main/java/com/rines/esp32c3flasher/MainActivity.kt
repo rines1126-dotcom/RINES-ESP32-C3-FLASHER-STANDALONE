@@ -27,6 +27,10 @@ import com.rines.esp32c3flasher.update.UpdateSettings
 import com.rines.esp32c3flasher.update.VersionComparator
 import com.rines.esp32c3flasher.update.ApkInstaller
 import com.rines.esp32c3flasher.ui.theme.RinesTheme
+import com.rines.esp32c3flasher.ui.components.RinesSectionCard
+import com.rines.esp32c3flasher.ui.components.RinesStatusPill
+import com.rines.esp32c3flasher.ui.components.RinesPrimaryButton
+import com.rines.esp32c3flasher.ui.components.RinesOutlineButton
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -95,6 +99,7 @@ fun RinesFlasherScreen(
         mutableStateOf<File?>(null)
     }
 
+    // USB PERMISSION MANAGER
     DisposableEffect(context) {
         val manager = UsbPermissionManager(context) { device, granted ->
             if (granted && device != null) {
@@ -111,10 +116,12 @@ fun RinesFlasherScreen(
         }
     }
 
+    // INITIAL USB SCAN
     LaunchedEffect(Unit) {
         devices = UsbDeviceScanner.scan(context)
     }
 
+    // USB ATTACH / DETACH
     DisposableEffect(context) {
         val receiver = UsbDeviceReceiver {
             devices = UsbDeviceScanner.scan(context)
@@ -144,6 +151,7 @@ fun RinesFlasherScreen(
         }
     }
 
+    // CHECK UPDATES
     fun checkForUpdates() {
         if (isCheckingUpdate || isDownloadingUpdate) return
 
@@ -158,26 +166,23 @@ fun RinesFlasherScreen(
                 val release = GitHubUpdateChecker.fetchLatestRelease()
                 latestRelease = release
 
-                val latestVersion = release.tagName
+                val hasUpdate = VersionComparator.isUpdateAvailable(
+                    installedVersion,
+                    release.tagName
+                )
 
-                if (latestVersion.isBlank()) {
-                    updateStatus = "Unable to read latest version."
-                } else {
-                    val hasUpdate = VersionComparator.isUpdateAvailable(
-                        installedVersion = installedVersion,
-                        latestVersion = latestVersion
-                    )
+                updateStatus = when {
+                    release.tagName.isBlank() ->
+                        "Unable to read latest version."
 
-                    updateStatus = when {
-                        hasUpdate && release.apkUrl != null ->
-                            "Update available: ${release.tagName}"
+                    hasUpdate && release.apkUrl != null ->
+                        "Update available: ${release.tagName}"
 
-                        hasUpdate ->
-                            "New version found, but no APK was attached to the release."
+                    hasUpdate ->
+                        "New version found, but no APK was attached."
 
-                        else ->
-                            "Your app is up to date. Installed: $installedVersion"
-                    }
+                    else ->
+                        "Your app is up to date. Installed: $installedVersion"
                 }
             } catch (e: Exception) {
                 updateStatus = "Update check failed: ${
@@ -189,6 +194,7 @@ fun RinesFlasherScreen(
         }
     }
 
+    // DOWNLOAD UPDATE
     fun downloadUpdate() {
         val apkUrl = latestRelease?.apkUrl
 
@@ -228,6 +234,7 @@ fun RinesFlasherScreen(
         }
     }
 
+    // INSTALL UPDATE
     fun installUpdate() {
         val apkFile = downloadedApk
 
@@ -238,11 +245,7 @@ fun RinesFlasherScreen(
         }
 
         try {
-            ApkInstaller.installApk(
-                context = context,
-                apkFile = apkFile
-            )
-
+            ApkInstaller.installApk(context, apkFile)
             updateStatus = "Opening Android installer..."
         } catch (e: Exception) {
             updateStatus = "Unable to open installer: ${
@@ -255,7 +258,17 @@ fun RinesFlasherScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("RINES ESP32-C3 FLASHER")
+                    Column {
+                        Text(
+                            "RINES ESP32-C3",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Text(
+                            "FLASHER",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             )
         }
@@ -269,246 +282,206 @@ fun RinesFlasherScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
+            // USB CONNECTION
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "USB CONNECTION",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                RinesSectionCard(
+                    title = "USB CONNECTION",
+                    subtitle = "Connect your ESP32-C3 device"
+                ) {
+                    RinesStatusPill(
+                        text = if (state.connected) "CONNECTED" else "DISCONNECTED",
+                        connected = state.connected
+                    )
 
-                        Text(
-                            if (state.connected) "Connected" else "Disconnected"
-                        )
+                    RinesPrimaryButton(
+                        text = "SCAN USB DEVICES",
+                        onClick = {
+                            devices = UsbDeviceScanner.scan(context)
+                        },
+                        enabled = !state.isBusy
+                    )
 
-                        Button(
+                    devices.forEach { info ->
+                        RinesOutlineButton(
+                            text = "${info.displayName} (${info.vendorIdHex}:${info.productIdHex})",
                             onClick = {
-                                devices = UsbDeviceScanner.scan(context)
+                                permissionManager?.requestPermission(info.device)
                             },
-                            enabled = !state.isBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Scan USB Devices")
-                        }
-
-                        devices.forEach { info ->
-                            OutlinedButton(
-                                onClick = {
-                                    permissionManager?.requestPermission(info.device)
-                                },
-                                enabled = !state.isBusy,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    "${info.displayName} " +
-                                        "(${info.vendorIdHex}:${info.productIdHex})"
-                                )
-                            }
-                        }
-
-                        if (state.connected) {
-                            OutlinedButton(
-                                onClick = {
-                                    vm.disconnect()
-                                },
-                                enabled = !state.isBusy,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Disconnect")
-                            }
-                        }
+                            enabled = !state.isBusy
+                        )
                     }
-                }
-            }
 
-            item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "FIRMWARE",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        FirmwarePicker(
-                            onFirmwareSelected = {
-                                vm.selectFirmware(it)
+                    if (state.connected) {
+                        RinesOutlineButton(
+                            text = "DISCONNECT DEVICE",
+                            onClick = {
+                                vm.disconnect()
                             },
-                            onError = {
-                                exportMessage = it
-                            }
-                        )
-
-                        Text(
-                            state.firmwareName.ifEmpty {
-                                "No firmware selected"
-                            }
-                        )
-
-                        if (state.firmwareSize > 0) {
-                            Text("Size: ${state.firmwareSize} bytes")
-                        }
-
-                        Text(
-                            if (state.firmwareValid) {
-                                "Firmware validated"
-                            } else {
-                                "Firmware not validated"
-                            }
+                            enabled = !state.isBusy
                         )
                     }
                 }
             }
 
+            // FIRMWARE
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            "FLASH OPERATIONS",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Button(
-                            onClick = {
-                                vm.synchronize()
-                            },
-                            enabled = state.connected && !state.isBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("SYNC ESP32-C3")
+                RinesSectionCard(
+                    title = "FIRMWARE",
+                    subtitle = "Select and validate your firmware file"
+                ) {
+                    FirmwarePicker(
+                        onFirmwareSelected = {
+                            vm.selectFirmware(it)
+                        },
+                        onError = {
+                            exportMessage = it
                         }
+                    )
 
-                        Button(
-                            onClick = {
-                                vm.flashFirmware()
-                            },
-                            enabled = state.connected &&
-                                state.firmwareValid &&
-                                !state.isBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("FLASH FIRMWARE")
-                        }
+                    Text(
+                        state.firmwareName.ifEmpty {
+                            "No firmware selected"
+                        },
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-                        OutlinedButton(
-                            onClick = {
-                                showEraseDialog = true
-                            },
-                            enabled = state.connected && !state.isBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("ERASE FLASH")
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                vm.verifyFirmware()
-                            },
-                            enabled = state.connected &&
-                                state.firmwareValid &&
-                                !state.isBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("VERIFY FIRMWARE")
-                        }
+                    if (state.firmwareSize > 0) {
+                        Text("Size: ${state.firmwareSize} bytes")
                     }
+
+                    RinesStatusPill(
+                        text = if (state.firmwareValid) {
+                            "FIRMWARE VALID"
+                        } else {
+                            "NOT VALIDATED"
+                        },
+                        connected = state.firmwareValid
+                    )
                 }
             }
 
+            // FLASH OPERATIONS
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "FLASH PROGRESS",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                RinesSectionCard(
+                    title = "FLASH OPERATIONS",
+                    subtitle = "ESP32-C3 programming controls"
+                ) {
+                    RinesPrimaryButton(
+                        text = "SYNC ESP32-C3",
+                        onClick = {
+                            vm.synchronize()
+                        },
+                        enabled = state.connected && !state.isBusy
+                    )
 
-                        LinearProgressIndicator(
-                            progress = {
-                                state.progress / 100f
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    RinesPrimaryButton(
+                        text = "FLASH FIRMWARE",
+                        onClick = {
+                            vm.flashFirmware()
+                        },
+                        enabled = state.connected &&
+                            state.firmwareValid &&
+                            !state.isBusy
+                    )
 
-                        Text("${state.progress}%")
-                        Text(state.message)
-                    }
+                    RinesOutlineButton(
+                        text = "ERASE FLASH",
+                        onClick = {
+                            showEraseDialog = true
+                        },
+                        enabled = state.connected && !state.isBusy
+                    )
+
+                    RinesOutlineButton(
+                        text = "VERIFY FIRMWARE",
+                        onClick = {
+                            vm.verifyFirmware()
+                        },
+                        enabled = state.connected &&
+                            state.firmwareValid &&
+                            !state.isBusy
+                    )
                 }
             }
 
+            // FLASH PROGRESS
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "FLASH LOGS",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                RinesSectionCard(
+                    title = "FLASH PROGRESS",
+                    subtitle = "Programming status"
+                ) {
+                    LinearProgressIndicator(
+                        progress = {
+                            state.progress / 100f
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    vm.clearLogs()
-                                }
-                            ) {
-                                Text("Clear Logs")
+                    Text(
+                        "${state.progress}%",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Text(state.message)
+                }
+            }
+
+            // FLASH LOGS
+            item {
+                RinesSectionCard(
+                    title = "FLASH LOGS",
+                    subtitle = "Operation messages and diagnostics"
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = {
+                                vm.clearLogs()
                             }
+                        ) {
+                            Text("Clear Logs")
+                        }
 
-                            TextButton(
-                                onClick = {
-                                    val exported = FlashLogExporter.export(
-                                        context,
-                                        state.logs.joinToString("\n") {
-                                            "[${it.timestamp}] " +
-                                                "[${it.level}] ${it.message}"
-                                        }
-                                    )
-
-                                    exportMessage = if (exported) {
-                                        "Log sharing opened."
-                                    } else {
-                                        "Unable to export logs."
+                        TextButton(
+                            onClick = {
+                                val exported = FlashLogExporter.export(
+                                    context,
+                                    state.logs.joinToString("\n") {
+                                        "[${it.timestamp}] [${it.level}] ${it.message}"
                                     }
+                                )
+
+                                exportMessage = if (exported) {
+                                    "Log sharing opened."
+                                } else {
+                                    "Unable to export logs."
                                 }
-                            ) {
-                                Text("Export Logs")
                             }
+                        ) {
+                            Text("Export Logs")
                         }
+                    }
 
-                        if (exportMessage.isNotEmpty()) {
-                            Text(
-                                exportMessage,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                    if (exportMessage.isNotEmpty()) {
+                        Text(
+                            exportMessage,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
 
-                        state.logs.forEach { log ->
-                            Text(
-                                "[${log.timestamp}] " +
-                                    "[${log.level}] ${log.message}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                    state.logs.forEach { log ->
+                        Text(
+                            "[${log.timestamp}] [${log.level}] ${log.message}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
 
+            // SETTINGS AND UPDATES
             item {
                 UpdateSettings(
                     installedVersion = installedVersion,
@@ -544,30 +517,31 @@ fun RinesFlasherScreen(
                 ) {
                     Spacer(Modifier.height(8.dp))
 
-                    OutlinedButton(
+                    RinesOutlineButton(
+                        text = "OPEN GITHUB RELEASE",
                         onClick = {
                             val intent = Intent(
                                 Intent.ACTION_VIEW,
                                 Uri.parse(release.releaseUrl)
                             )
                             context.startActivity(intent)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Open GitHub Release")
-                    }
+                        }
+                    )
                 }
             }
 
+            // FOOTER
             item {
                 Text(
                     "RINES • Independent ESP32-C3 Flasher",
-                    style = MaterialTheme.typography.labelSmall
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
 
+    // ERASE DIALOG
     if (showEraseDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -579,8 +553,7 @@ fun RinesFlasherScreen(
             text = {
                 Column {
                     Text(
-                        "Enter erase size in bytes. " +
-                            "Must be a multiple of 4096."
+                        "Enter erase size in bytes. Must be a multiple of 4096."
                     )
 
                     OutlinedTextField(
