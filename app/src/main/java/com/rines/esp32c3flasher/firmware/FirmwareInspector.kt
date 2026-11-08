@@ -62,7 +62,7 @@ object FirmwareInspector {
 
         for (segment in 0 until segmentCount) {
 
-            if (offset + SEGMENT_HEADER_SIZE > firmware.size) {
+            if (offset > firmware.size - SEGMENT_HEADER_SIZE) {
                 return invalid(
                     fileName,
                     firmware,
@@ -79,7 +79,7 @@ object FirmwareInspector {
 
             offset += SEGMENT_HEADER_SIZE
 
-            if (dataLength > firmware.size - offset) {
+            if (dataLength > firmware.size.toLong() - offset) {
                 return invalid(
                     fileName,
                     firmware,
@@ -99,10 +99,12 @@ object FirmwareInspector {
             offset = end
         }
 
-        // ESP image checksum is placed at a 16-byte boundary.
-        val checksumOffset = ((offset + 15) / 16) * 16 - 1
+        // Checksum occupies the last byte before the next
+        // 16-byte boundary, including when offset is aligned.
+        val checksumOffset =
+            (((offset.toLong() / 16L) + 1L) * 16L - 1L)
 
-        if (checksumOffset >= firmware.size) {
+        if (checksumOffset >= firmware.size.toLong()) {
             return invalid(
                 fileName,
                 firmware,
@@ -112,8 +114,10 @@ object FirmwareInspector {
             )
         }
 
+        val checksumIndex = checksumOffset.toInt()
+
         val storedChecksum =
-            firmware[checksumOffset].toInt() and 0xFF
+            firmware[checksumIndex].toInt() and 0xFF
 
         if (storedChecksum != checksum) {
             return invalid(
@@ -126,7 +130,7 @@ object FirmwareInspector {
         }
 
         if (hashAppended) {
-            val hashStart = checksumOffset + 1
+            val hashStart = checksumIndex + 1
             val hashEnd = hashStart + SHA256_LENGTH
 
             if (hashEnd > firmware.size) {
