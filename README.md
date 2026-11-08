@@ -1,0 +1,2 @@
+# RINES-ESP32-C3-FLASHER-STANDALONE
+Independent ESP32-C3 USB OTG Flasher for Android
