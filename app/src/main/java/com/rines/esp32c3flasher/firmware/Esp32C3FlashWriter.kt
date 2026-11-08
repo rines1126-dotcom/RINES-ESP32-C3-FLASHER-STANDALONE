@@ -1,4 +1,3 @@
-
 package com.rines.esp32c3flasher.firmware
 
 import com.rines.esp32c3flasher.protocol.Esp32C3Command
@@ -24,14 +23,6 @@ class Esp32C3FlashWriter(
         private const val FLASH_END_TIMEOUT = 5000L
     }
 
-    /**
-     * Writes a firmware image to ESP32-C3 SPI flash.
-     *
-     * progressCallback:
-     * progress percentage, status message
-     *
-     * Keep this operation on a background thread.
-     */
     fun writeFirmware(
         firmware: ByteArray,
         flashAddress: Long = 0L,
@@ -58,10 +49,10 @@ class Esp32C3FlashWriter(
             (firmwareSize + BLOCK_SIZE - 1) / BLOCK_SIZE
 
         val eraseSize =
-            ((firmwareSize + SECTOR_SIZE - 1) / SECTOR_SIZE) *
+            ((firmwareSize.toLong() + SECTOR_SIZE - 1) / SECTOR_SIZE) *
                 SECTOR_SIZE
 
-        if (flashAddress + eraseSize > 0x100000000L) {
+        if (flashAddress > 0xFFFFFFFFL - eraseSize) {
             return FlashWriteResult(
                 false,
                 "Flash address range is too large."
@@ -70,9 +61,8 @@ class Esp32C3FlashWriter(
 
         progressCallback(0, "Starting flash operation...")
 
-        // 1. FLASH_BEGIN
         val beginPayload = byteArrayOf(
-            *Esp32C3Command.intToBytesLE(eraseSize.toLong()),
+            *Esp32C3Command.intToBytesLE(eraseSize),
             *Esp32C3Command.intToBytesLE(blockCount.toLong()),
             *Esp32C3Command.intToBytesLE(BLOCK_SIZE.toLong()),
             *Esp32C3Command.intToBytesLE(flashAddress)
@@ -93,7 +83,6 @@ class Esp32C3FlashWriter(
 
         progressCallback(0, "Flash area prepared.")
 
-        // 2. FLASH_DATA blocks
         var bytesWritten = 0
 
         for (sequence in 0 until blockCount) {
@@ -105,7 +94,6 @@ class Esp32C3FlashWriter(
                 firmwareSize - sourceOffset
             )
 
-            // Last block is padded with 0xFF.
             val block = ByteArray(BLOCK_SIZE) {
                 0xFF.toByte()
             }
@@ -154,14 +142,10 @@ class Esp32C3FlashWriter(
             )
         }
 
-        // 3. FLASH_END
-        // 0 = reboot; 1 = remain in download mode.
-        // ROM loader also receives a second zero word.
-        val endPayload = byteArrayOf(
-            *Esp32C3Command.intToBytesLE(
-                if (reboot) 0 else 1
-            ),
-            *Esp32C3Command.intToBytesLE(0)
+        // ESP ROM FLASH_END requires exactly one 32-bit word.
+        // 0 = reboot, 1 = remain in download mode.
+        val endPayload = Esp32C3Command.intToBytesLE(
+            if (reboot) 0 else 1
         )
 
         val endResult = romClient.execute(
