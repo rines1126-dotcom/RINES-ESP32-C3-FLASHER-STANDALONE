@@ -1,8 +1,14 @@
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "release-keystore.jks"
+val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+val keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
 
 android {
     namespace = "com.rines.esp32c3flasher"
@@ -18,9 +24,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(keystorePath)
+            storePassword = keystorePassword
+            keyAlias = keyAliasValue
+            keyPassword = keyPasswordValue
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
