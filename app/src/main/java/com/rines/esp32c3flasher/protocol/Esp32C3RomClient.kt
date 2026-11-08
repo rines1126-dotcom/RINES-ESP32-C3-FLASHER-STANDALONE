@@ -1,8 +1,8 @@
 
 package com.rines.esp32c3flasher.protocol
 
-import com.rines.esp32c3flasher.usb.UsbSerialTransport
 import android.os.SystemClock
+import com.rines.esp32c3flasher.usb.UsbSerialTransport
 
 data class RomCommandResult(
     val success: Boolean,
@@ -14,6 +14,7 @@ class Esp32C3RomClient(
     private val transport: UsbSerialTransport
 ) {
 
+    @Synchronized
     fun execute(
         command: Int,
         data: ByteArray = byteArrayOf(),
@@ -28,15 +29,45 @@ class Esp32C3RomClient(
             )
         }
 
+        if (command !in 0..0xFF) {
+            return RomCommandResult(
+                false,
+                "Invalid ROM command."
+            )
+        }
+
+        if (checksum !in 0..0xFF) {
+            return RomCommandResult(
+                false,
+                "Invalid command checksum."
+            )
+        }
+
+        if (timeoutMs <= 0) {
+            return RomCommandResult(
+                false,
+                "Invalid command timeout."
+            )
+        }
+
         val decoder = SlipCodec.Decoder()
 
-        val request = Esp32C3Command.buildRequest(
-            command = command,
-            data = data,
-            checksum = checksum
-        )
+        val request = try {
+            Esp32C3Command.buildRequest(
+                command = command,
+                data = data,
+                checksum = checksum
+            )
+        } catch (error: Exception) {
+            return RomCommandResult(
+                false,
+                "Unable to build ROM request: ${error.message}"
+            )
+        }
 
-        if (!transport.write(SlipCodec.encode(request))) {
+        val encodedRequest = SlipCodec.encode(request)
+
+        if (!transport.write(encodedRequest)) {
             return RomCommandResult(
                 false,
                 "Command transmission failed: ${transport.lastError}"
@@ -57,7 +88,9 @@ class Esp32C3RomClient(
                 "USB read failed: ${transport.lastError}"
             )
 
-            if (incoming.isEmpty()) continue
+            if (incoming.isEmpty()) {
+                continue
+            }
 
             for (packet in decoder.feed(incoming)) {
 
