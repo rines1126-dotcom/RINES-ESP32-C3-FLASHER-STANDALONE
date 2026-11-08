@@ -32,6 +32,7 @@ import com.rines.esp32c3flasher.ui.components.RinesStatusPill
 import com.rines.esp32c3flasher.ui.components.RinesPrimaryButton
 import com.rines.esp32c3flasher.ui.components.RinesOutlineButton
 import com.rines.esp32c3flasher.ui.components.FlashProgressCard
+import com.rines.esp32c3flasher.ui.components.FlashLogsCard
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -405,7 +406,7 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // NEW FLASH PROGRESS DASHBOARD
+            // FLASH PROGRESS
             item {
                 FlashProgressCard(
                     progress = state.progress,
@@ -416,53 +417,39 @@ fun RinesFlasherScreen(
 
             // FLASH LOGS
             item {
-                RinesSectionCard(
-                    title = "FLASH LOGS",
-                    subtitle = "Operation messages and diagnostics"
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            onClick = {
-                                vm.clearLogs()
-                            }
-                        ) {
-                            Text("Clear Logs")
-                        }
-
-                        TextButton(
-                            onClick = {
-                                val exported = FlashLogExporter.export(
-                                    context,
-                                    state.logs.joinToString("\n") {
-                                        "[${it.timestamp}] [${it.level}] ${it.message}"
-                                    }
-                                )
-
-                                exportMessage = if (exported) {
-                                    "Log sharing opened."
-                                } else {
-                                    "Unable to export logs."
+                    FlashLogsCard(
+                        logs = state.logs.map { log ->
+                            "[${log.timestamp}] [${log.level}] ${log.message}"
+                        },
+                        onClearLogs = {
+                            vm.clearLogs()
+                            exportMessage = ""
+                        },
+                        onExportLogs = {
+                            val exported = FlashLogExporter.export(
+                                context,
+                                state.logs.joinToString("\n") {
+                                    "[${it.timestamp}] [${it.level}] ${it.message}"
                                 }
+                            )
+
+                            exportMessage = if (exported) {
+                                "Log sharing opened."
+                            } else {
+                                "Unable to export logs."
                             }
-                        ) {
-                            Text("Export Logs")
                         }
-                    }
+                    )
 
                     if (exportMessage.isNotEmpty()) {
                         Text(
-                            exportMessage,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    state.logs.forEach { log ->
-                        Text(
-                            "[${log.timestamp}] [${log.level}] ${log.message}",
-                            style = MaterialTheme.typography.bodySmall
+                            text = exportMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
