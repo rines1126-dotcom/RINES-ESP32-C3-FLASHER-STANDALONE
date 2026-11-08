@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,17 +55,11 @@ fun FlashLogsCard(
                 Spacer(modifier = Modifier.weight(1f))
 
                 TextButton(onClick = onClearLogs) {
-                    Text(
-                        text = "CLEAR",
-                        color = Color(0xFFFF6B6B)
-                    )
+                    Text("CLEAR", color = Color(0xFFFF6B6B))
                 }
 
                 TextButton(onClick = onExportLogs) {
-                    Text(
-                        text = "EXPORT",
-                        color = Color(0xFF00D9FF)
-                    )
+                    Text("EXPORT", color = Color(0xFF00D9FF))
                 }
             }
 
