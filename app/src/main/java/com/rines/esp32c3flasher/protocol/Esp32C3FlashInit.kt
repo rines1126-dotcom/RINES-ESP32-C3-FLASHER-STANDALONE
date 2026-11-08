@@ -11,12 +11,15 @@ class Esp32C3FlashInit(
 ) {
 
     /**
-     * Attaches the ESP32-C3 ROM bootloader
-     * to its default SPI flash interface.
+     * Attaches the default SPI flash interface.
+     * ESP32-C3 ROM requires two zero-valued words.
      */
     fun attachFlash(): FlashInitResult {
 
-        val payload = Esp32C3Command.intToBytesLE(0)
+        val payload = byteArrayOf(
+            *Esp32C3Command.intToBytesLE(0),
+            *Esp32C3Command.intToBytesLE(0)
+        )
 
         val result = romClient.execute(
             command = Esp32C3Command.SPI_ATTACH,
@@ -27,18 +30,16 @@ class Esp32C3FlashInit(
         return FlashInitResult(
             success = result.success,
             message = if (result.success) {
-                "SPI flash interface attached successfully."
+                "ESP32-C3 SPI flash attached successfully."
             } else {
-                "SPI flash attach failed: ${result.message}"
+                "SPI attach failed: ${result.message}"
             }
         )
     }
 
     /**
-     * Configures SPI flash parameters.
-     *
-     * flashSizeBytes must be obtained from actual
-     * flash detection. Do not assume the flash size.
+     * Configures the SPI flash parameters.
+     * Flash capacity must come from actual chip detection.
      */
     fun setFlashParameters(
         flashSizeBytes: Long
@@ -47,7 +48,7 @@ class Esp32C3FlashInit(
         if (flashSizeBytes <= 0) {
             return FlashInitResult(
                 false,
-                "Invalid flash size."
+                "Invalid flash capacity."
             )
         }
 
@@ -69,9 +70,9 @@ class Esp32C3FlashInit(
         return FlashInitResult(
             success = result.success,
             message = if (result.success) {
-                "SPI flash parameters configured."
+                "SPI flash parameters configured successfully."
             } else {
-                "SPI configuration failed: ${result.message}"
+                "SPI parameter configuration failed: ${result.message}"
             }
         )
     }
