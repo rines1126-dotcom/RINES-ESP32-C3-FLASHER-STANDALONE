@@ -17,6 +17,8 @@ class Esp32C3FlashEraser(
     companion object {
         private const val SECTOR_SIZE = 4096L
         private const val BLOCK_SIZE = 1024L
+        private const val MAX_UINT32 = 0xFFFFFFFFL
+        private const val ADDRESS_SPACE_SIZE = 0x100000000L
     }
 
     /**
@@ -41,8 +43,14 @@ class Esp32C3FlashEraser(
             )
         }
 
-        if (flashAddress + sizeBytes > 0x100000000L) {
-            return failure("Flash region exceeds address range.")
+        if (
+            flashAddress > MAX_UINT32 ||
+            sizeBytes > MAX_UINT32 ||
+            sizeBytes > ADDRESS_SPACE_SIZE - flashAddress
+        ) {
+            return failure(
+                "Flash region exceeds the supported 32-bit address range."
+            )
         }
 
         val beginPayload = byteArrayOf(
@@ -64,7 +72,7 @@ class Esp32C3FlashEraser(
             )
         }
 
-        // One 32-bit word: 1 means stay in the ROM loader.
+        // One 32-bit word: 1 means stay in ROM download mode.
         val endPayload = Esp32C3Command.intToBytesLE(1)
 
         val endResult = romClient.execute(
