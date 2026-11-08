@@ -22,31 +22,33 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Decode Android keystore
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -e
 
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || \
-             [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || \
-             [ -z "$ANDROID_KEY_ALIAS" ] || \
-             [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
-            echo "ERROR: One or more signing secrets are missing."
-            exit 1
-          fi
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "${{ secrets.ANDROID_KEY_PASSWORD }}"
 
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode \
+          echo "$KEYSTORE_BASE64" | base64 --decode \
             > "$RUNNER_TEMP/rines-release.jks"
 
           test -s "$RUNNER_TEMP/rines-release.jks"
 
           keytool -list \
             -keystore "$RUNNER_TEMP/rines-release.jks" \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS"
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS"
 
       - name: Build signed Release APK
         env:
@@ -55,8 +57,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          chmod +x ./gradlew
-          ./gradlew :app:assembleRelease --stacktrace
+          gradle --version
+          gradle :app:assembleRelease --stacktrace
 
       - name: Verify APK signature
         run: |
