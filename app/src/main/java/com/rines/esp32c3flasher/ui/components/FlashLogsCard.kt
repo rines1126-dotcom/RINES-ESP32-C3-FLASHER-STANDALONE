@@ -1,11 +1,16 @@
-
 package com.rines.esp32c3flasher.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -13,15 +18,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rines.esp32c3flasher.firmware.FlashLog
 
 @Composable
 fun FlashLogsCard(
-    logs: List<FlashLog>,
+    logs: List<String>,
     onClearLogs: () -> Unit,
     onExportLogs: () -> Unit,
     modifier: Modifier = Modifier
@@ -30,69 +35,79 @@ fun FlashLogsCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0D141D)
+            containerColor = Color(0xFF111A24)
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Text(
-                text = "FLASH LOGS",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF00D9FF)
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = "FLASH LOGS",
+                    color = Color(0xFF00D9FF),
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
                 TextButton(onClick = onClearLogs) {
-                    Text("CLEAR")
+                    Text(
+                        text = "CLEAR",
+                        color = Color(0xFFFF6B6B)
+                    )
                 }
 
                 TextButton(onClick = onExportLogs) {
-                    Text("EXPORT")
+                    Text(
+                        text = "EXPORT",
+                        color = Color(0xFF00D9FF)
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (logs.isEmpty()) {
                 Text(
                     text = "No logs available.",
-                    color = Color(0xFF8193A5),
-                    fontSize = 12.sp
+                    color = Color(0xFF8A9AAA),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 16.dp)
                 )
             } else {
-                logs.forEach { log ->
-                    val level = log.level.toString().uppercase()
-
-                    val logColor = when {
-                        level.contains("ERROR") ->
-                            Color(0xFFFF6262)
-
-                        level.contains("WARN") ->
-                            Color(0xFFFFC857)
-
-                        level.contains("SUCCESS") ->
-                            Color(0xFF00E5A8)
-
-                        else ->
-                            Color(0xFFB8D7EB)
-                    }
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Text(
-                            text = "[${log.timestamp}] [$level]",
-                            color = logColor,
-                            fontSize = 11.sp
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(
+                            color = Color(0xFF080D14),
+                            shape = RoundedCornerShape(10.dp)
                         )
-
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    items(logs) { log ->
                         Text(
-                            text = log.message,
-                            color = Color(0xFFE6F1FA),
-                            fontSize = 12.sp
+                            text = log,
+                            color = when {
+                                log.contains("ERROR", ignoreCase = true) ->
+                                    Color(0xFFFF6B6B)
+
+                                log.contains("WARNING", ignoreCase = true) ->
+                                    Color(0xFFFFD166)
+
+                                log.contains("SUCCESS", ignoreCase = true) ->
+                                    Color(0xFF00E5A8)
+
+                                else -> Color(0xFFB8C7D9)
+                            },
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
                         )
                     }
                 }
