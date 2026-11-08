@@ -26,6 +26,7 @@ import com.rines.esp32c3flasher.update.ReleaseInfo
 import com.rines.esp32c3flasher.update.UpdateSettings
 import com.rines.esp32c3flasher.update.VersionComparator
 import com.rines.esp32c3flasher.update.ApkInstaller
+import com.rines.esp32c3flasher.ui.theme.RinesTheme
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme {
+            RinesTheme {
                 RinesFlasherScreen()
             }
         }
@@ -59,7 +60,6 @@ fun RinesFlasherScreen(
         mutableStateOf<UsbPermissionManager?>(null)
     }
 
-    // APP VERSION
     val installedVersion = remember {
         try {
             @Suppress("DEPRECATION")
@@ -71,7 +71,6 @@ fun RinesFlasherScreen(
         }
     }
 
-    // UPDATE CHECKER STATE
     var updateStatus by remember {
         mutableStateOf("Tap Check for Updates to check for a new version.")
     }
@@ -84,7 +83,6 @@ fun RinesFlasherScreen(
         mutableStateOf<ReleaseInfo?>(null)
     }
 
-    // APK DOWNLOAD STATE
     var isDownloadingUpdate by remember {
         mutableStateOf(false)
     }
@@ -97,7 +95,6 @@ fun RinesFlasherScreen(
         mutableStateOf<File?>(null)
     }
 
-    // USB PERMISSION MANAGER
     DisposableEffect(context) {
         val manager = UsbPermissionManager(context) { device, granted ->
             if (granted && device != null) {
@@ -114,12 +111,10 @@ fun RinesFlasherScreen(
         }
     }
 
-    // INITIAL USB SCAN
     LaunchedEffect(Unit) {
         devices = UsbDeviceScanner.scan(context)
     }
 
-    // AUTOMATIC USB ATTACH/DETACH DETECTION
     DisposableEffect(context) {
         val receiver = UsbDeviceReceiver {
             devices = UsbDeviceScanner.scan(context)
@@ -149,7 +144,6 @@ fun RinesFlasherScreen(
         }
     }
 
-    // CHECK GITHUB RELEASE
     fun checkForUpdates() {
         if (isCheckingUpdate || isDownloadingUpdate) return
 
@@ -195,7 +189,6 @@ fun RinesFlasherScreen(
         }
     }
 
-    // DOWNLOAD APK UPDATE
     fun downloadUpdate() {
         val apkUrl = latestRelease?.apkUrl
 
@@ -235,7 +228,6 @@ fun RinesFlasherScreen(
         }
     }
 
-    // INSTALL DOWNLOADED APK
     fun installUpdate() {
         val apkFile = downloadedApk
 
@@ -277,7 +269,6 @@ fun RinesFlasherScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // USB CONNECTION
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
@@ -333,7 +324,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // FIRMWARE
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
@@ -375,7 +365,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // FLASH OPERATIONS
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
@@ -434,7 +423,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // FLASH PROGRESS
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
@@ -459,7 +447,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // FLASH LOGS
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(
@@ -522,7 +509,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // SETTINGS AND IN-APP UPDATES
             item {
                 UpdateSettings(
                     installedVersion = installedVersion,
@@ -573,7 +559,6 @@ fun RinesFlasherScreen(
                 }
             }
 
-            // APP FOOTER
             item {
                 Text(
                     "RINES • Independent ESP32-C3 Flasher",
@@ -583,7 +568,6 @@ fun RinesFlasherScreen(
         }
     }
 
-    // ERASE FLASH DIALOG
     if (showEraseDialog) {
         AlertDialog(
             onDismissRequest = {
