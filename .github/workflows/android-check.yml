@@ -30,16 +30,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set Up Gradle
+      - name: Set Up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
 
-      - name: Check Gradle Wrapper
-        run: |
-          test -f gradlew
-          test -f gradle/wrapper/gradle-wrapper.properties
+      - name: Check Gradle Installation
+        run: gradle --version
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest
+        run: gradle testDebugUnitTest
 
       - name: Run Android Lint
-        run: ./gradlew lintDebug
+        run: gradle lintDebug
