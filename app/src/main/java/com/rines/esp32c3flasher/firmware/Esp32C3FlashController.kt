@@ -3,6 +3,7 @@ package com.rines.esp32c3flasher.firmware
 
 import android.content.Context
 import android.hardware.usb.UsbDevice
+import com.rines.esp32c3flasher.protocol.Esp32C3FlashInit
 import com.rines.esp32c3flasher.protocol.Esp32C3RomClient
 import com.rines.esp32c3flasher.protocol.Esp32C3Sync
 import com.rines.esp32c3flasher.usb.UsbSerialTransport
@@ -17,10 +18,13 @@ class Esp32C3FlashController(context: Context) {
     private val transport = UsbSerialTransport(context)
     private val romClient = Esp32C3RomClient(transport)
     private val sync = Esp32C3Sync(transport)
+    private val flashInit = Esp32C3FlashInit(romClient)
 
     private val writer = Esp32C3FlashWriter(romClient)
     private val eraser = Esp32C3FlashEraser(romClient)
     private val verifier = Esp32C3FlashVerifier(romClient)
+
+    private var flashReady = false
 
     val isConnected: Boolean
         get() = transport.isConnected
@@ -28,10 +32,9 @@ class Esp32C3FlashController(context: Context) {
     val lastError: String
         get() = transport.lastError
 
-    /**
-     * Connects to an ESP32-C3 USB serial device.
-     */
     fun connect(device: UsbDevice): FlashControllerResult {
+        flashReady = false
+
         val connected = transport.connect(device)
 
         return FlashControllerResult(
@@ -45,22 +48,47 @@ class Esp32C3FlashController(context: Context) {
     }
 
     /**
-     * Synchronizes with the ESP32-C3 ROM bootloader.
-     * Run on a background thread.
+     * Synchronizes with the ESP32-C3 ROM bootloader
+     * and attaches the SPI flash interface.
      */
     fun synchronize(): FlashControllerResult {
-        val result = sync.synchronize()
+
+        flashReady = false
+
+        if (!transport.isConnected) {
+            return FlashControllerResult(
+                false,
+                "ESP32-C3 is not connected."
+            )
+        }
+
+        val syncResult = sync.synchronize()
+
+        if (!syncResult.success) {
+            return FlashControllerResult(
+                false,
+                syncResult.message
+            )
+        }
+
+        val attachResult = flashInit.attachFlash()
+
+        if (!attachResult.success) {
+            return FlashControllerResult(
+                false,
+                "SYNC successful, but SPI flash attachment failed: " +
+                    attachResult.message
+            )
+        }
+
+        flashReady = true
 
         return FlashControllerResult(
-            result.success,
-            result.message
+            true,
+            "ESP32-C3 synchronized and SPI flash attached successfully."
         )
     }
 
-    /**
-     * Writes the selected firmware.
-     * Run on a background thread.
-     */
     fun flashFirmware(
         firmware: ByteArray,
         progress: (Int, String) -> Unit = { _, _ -> }
@@ -73,6 +101,13 @@ class Esp32C3FlashController(context: Context) {
             )
         }
 
+        if (!flashReady) {
+            return FlashWriteResult(
+                false,
+                "Please synchronize with ESP32-C3 first."
+            )
+        }
+
         return writer.writeFirmware(
             firmware = firmware,
             flashAddress = 0x000000L,
@@ -81,10 +116,6 @@ class Esp32C3FlashController(context: Context) {
         )
     }
 
-    /**
-     * Erases the requested flash region.
-     * The size must be sector-aligned.
-     */
     fun eraseFlash(
         sizeBytes: Long
     ): FlashEraseResult {
@@ -97,15 +128,20 @@ class Esp32C3FlashController(context: Context) {
             )
         }
 
+        if (!flashReady) {
+            return FlashEraseResult(
+                false,
+                0,
+                "Please synchronize with ESP32-C3 first."
+            )
+        }
+
         return eraser.eraseRegion(
             flashAddress = 0x000000L,
             sizeBytes = sizeBytes
         )
     }
 
-    /**
-     * Verifies firmware using ROM MD5.
-     */
     fun verifyFirmware(
         firmware: ByteArray
     ): FlashVerifyResult {
@@ -119,6 +155,15 @@ class Esp32C3FlashController(context: Context) {
             )
         }
 
+        if (!flashReady) {
+            return FlashVerifyResult(
+                false,
+                "",
+                "",
+                "Please synchronize with ESP32-C3 first."
+            )
+        }
+
         return verifier.verifyFirmware(
             firmware = firmware,
             flashAddress = 0x000000L
@@ -126,6 +171,7 @@ class Esp32C3FlashController(context: Context) {
     }
 
     fun disconnect() {
+        flashReady = false
         transport.disconnect()
     }
 }
