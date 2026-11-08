@@ -1,11 +1,15 @@
+
 package com.rines.esp32c3flasher.update
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -29,70 +34,113 @@ fun UpdateSettings(
     onInstallUpdate: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 3.dp
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "SETTINGS",
-                style = MaterialTheme.typography.titleMedium
+                text = "SOFTWARE UPDATE",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
             )
-
-            Text("App Version: $installedVersion")
 
             Text(
-                text = "Software Updates",
-                style = MaterialTheme.typography.titleSmall
+                text = "RINES ESP32-C3 FLASHER",
+                style = MaterialTheme.typography.bodyMedium
             )
 
-            Text(updateStatus)
+            Text(
+                text = "Installed Version: $installedVersion",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Text(
+                text = updateStatus,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
             Button(
                 onClick = onCheckUpdates,
                 enabled = !isChecking && !isDownloading,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
                 if (isChecking) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Text("Checking...")
                 } else {
-                    Text("Check for Updates")
+                    Text("CHECK FOR UPDATES")
                 }
             }
 
             if (latestVersion != null) {
-                Text("Latest Version: $latestVersion")
+                Text(
+                    text = "Latest Version: $latestVersion",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF00E5A8)
+                )
 
                 if (isDownloading) {
-                    Text("Downloading update: $downloadProgress%")
+                    Text(
+                        text = "Downloading: $downloadProgress%",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
                     LinearProgressIndicator(
                         progress = {
-                            downloadProgress / 100f
+                            (downloadProgress / 100f).coerceIn(0f, 1f)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
 
                 if (!apkDownloaded && !isDownloading) {
                     Button(
                         onClick = onDownloadUpdate,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Download Update")
+                        Text("DOWNLOAD UPDATE")
                     }
                 }
 
                 if (apkDownloaded) {
                     OutlinedButton(
                         onClick = onInstallUpdate,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Install Update")
+                        Text("INSTALL UPDATE")
                     }
                 }
             }
+
+            Text(
+                text = "Updates are provided through GitHub Releases.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
