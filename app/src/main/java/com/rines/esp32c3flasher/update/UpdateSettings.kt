@@ -1,4 +1,3 @@
-
 package com.rines.esp32c3flasher.update
 
 import androidx.compose.foundation.layout.Arrangement
@@ -8,7 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,7 +20,13 @@ fun UpdateSettings(
     installedVersion: String,
     updateStatus: String,
     isChecking: Boolean,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    latestVersion: String? = null,
+    isDownloading: Boolean = false,
+    downloadProgress: Int = 0,
+    apkDownloaded: Boolean = false,
+    onDownloadUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -44,13 +51,46 @@ fun UpdateSettings(
 
             Button(
                 onClick = onCheckUpdates,
-                enabled = !isChecking,
+                enabled = !isChecking && !isDownloading,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isChecking) {
                     CircularProgressIndicator()
                 } else {
                     Text("Check for Updates")
+                }
+            }
+
+            if (latestVersion != null) {
+                Text("Latest Version: $latestVersion")
+
+                if (isDownloading) {
+                    Text("Downloading update: $downloadProgress%")
+
+                    LinearProgressIndicator(
+                        progress = {
+                            downloadProgress / 100f
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (!apkDownloaded && !isDownloading) {
+                    Button(
+                        onClick = onDownloadUpdate,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Download Update")
+                    }
+                }
+
+                if (apkDownloaded) {
+                    OutlinedButton(
+                        onClick = onInstallUpdate,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Install Update")
+                    }
                 }
             }
         }
