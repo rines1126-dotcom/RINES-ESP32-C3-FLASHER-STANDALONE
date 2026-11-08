@@ -11,15 +11,29 @@ data class Esp32C3Response(
     val isResponse: Boolean
         get() = direction == Esp32C3Command.RESPONSE_DIRECTION
 
+    // ESP32 ROM status is stored in the final four data bytes.
+    val status: Int?
+        get() {
+            if (data.size < 4) return null
+            return data[data.size - 4].toInt() and 0xFF
+        }
+
+    val errorCode: Int?
+        get() {
+            if (data.size < 4) return null
+            return data[data.size - 3].toInt() and 0xFF
+        }
+
     val isSuccessful: Boolean
-        get() = isResponse && value == 0L
+        get() = isResponse && status == 0
 
     fun describe(): String {
         return buildString {
             append("Command: 0x%02X".format(command))
             append(", Length: $dataLength")
             append(", Value: 0x%08X".format(value))
-            append(", Data: ${data.size} bytes")
+            append(", Status: ${status ?: "Unknown"}")
+            append(", Error: ${errorCode ?: "Unknown"}")
         }
     }
 }
@@ -28,17 +42,8 @@ object Esp32C3ResponseParser {
 
     private const val HEADER_SIZE = 8
 
-    /**
-     * Parses a decoded ESP ROM bootloader response.
-     *
-     * Response structure:
-     * Direction | Command | Data Length | Value | Data
-     */
     fun parse(packet: ByteArray): Esp32C3Response? {
-
-        if (packet.size < HEADER_SIZE) {
-            return null
-        }
+        if (packet.size < HEADER_SIZE) return null
 
         val direction = packet[0].toInt() and 0xFF
         val command = packet[1].toInt() and 0xFF
@@ -47,14 +52,11 @@ object Esp32C3ResponseParser {
             (packet[2].toInt() and 0xFF) or
             ((packet[3].toInt() and 0xFF) shl 8)
 
-        val value = Esp32C3Command.readUInt32LE(
-            packet,
-            4
-        )
-
         if (packet.size != HEADER_SIZE + dataLength) {
             return null
         }
+
+        val value = Esp32C3Command.readUInt32LE(packet, 4)
 
         val data = packet.copyOfRange(
             HEADER_SIZE,
@@ -70,9 +72,6 @@ object Esp32C3ResponseParser {
         )
     }
 
-    /**
-     * Checks whether a response matches the requested command.
-     */
     fun matchesCommand(
         response: Esp32C3Response,
         expectedCommand: Int
@@ -81,9 +80,6 @@ object Esp32C3ResponseParser {
             response.command == expectedCommand
     }
 
-    /**
-     * Checks whether the response indicates success.
-     */
     fun isSuccessful(
         response: Esp32C3Response,
         expectedCommand: Int
