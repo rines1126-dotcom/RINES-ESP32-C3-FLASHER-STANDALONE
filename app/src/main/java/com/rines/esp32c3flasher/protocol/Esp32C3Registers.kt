@@ -5,10 +5,29 @@ class Esp32C3Registers(
     private val romClient: Esp32C3RomClient
 ) {
 
+    companion object {
+        private const val UINT32_MAX = 0xFFFFFFFFL
+    }
+
+    /**
+     * Checks whether a value fits in an unsigned 32-bit integer.
+     */
+    private fun isValidUInt32(value: Long): Boolean {
+        return value in 0..UINT32_MAX
+    }
+
     /**
      * Reads a 32-bit ESP32-C3 register.
      */
     fun readRegister(address: Long): RegisterResult {
+
+        if (!isValidUInt32(address)) {
+            return RegisterResult(
+                success = false,
+                value = null,
+                message = "Invalid register address: must be a 32-bit unsigned value."
+            )
+        }
 
         val payload = Esp32C3Command.intToBytesLE(address)
 
@@ -38,9 +57,41 @@ class Esp32C3Registers(
     fun writeRegister(
         address: Long,
         value: Long,
-        mask: Long = 0xFFFFFFFFL,
+        mask: Long = UINT32_MAX,
         delayUs: Long = 0
     ): RegisterResult {
+
+        if (!isValidUInt32(address)) {
+            return RegisterResult(
+                success = false,
+                value = null,
+                message = "Invalid register address."
+            )
+        }
+
+        if (!isValidUInt32(value)) {
+            return RegisterResult(
+                success = false,
+                value = null,
+                message = "Invalid register value."
+            )
+        }
+
+        if (!isValidUInt32(mask)) {
+            return RegisterResult(
+                success = false,
+                value = null,
+                message = "Invalid register mask."
+            )
+        }
+
+        if (!isValidUInt32(delayUs)) {
+            return RegisterResult(
+                success = false,
+                value = null,
+                message = "Invalid register write delay."
+            )
+        }
 
         val payload = byteArrayOf(
             *Esp32C3Command.intToBytesLE(address),
