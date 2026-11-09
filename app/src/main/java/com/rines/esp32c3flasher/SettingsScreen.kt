@@ -1,6 +1,8 @@
 
 package com.rines.esp32c3flasher
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +40,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.rines.esp32c3flasher.update.UpdateSettings
+
+private const val RINES_GITHUB_REPOSITORY =
+    "https://github.com/rines1126-dotcom/RINES-ESP32-C3-FLASHER-STANDALONE"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,10 +66,29 @@ fun SettingsScreen(
     onInstallUpdate: () -> Unit,
     onOpenGithubRelease: () -> Unit,
     onBack: () -> Unit,
-    onOpenGithubRepository: () -> Unit = onOpenGithubRelease
+    onOpenGithubRepository: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+
     var showPrivacyPolicy by remember {
         mutableStateOf(false)
+    }
+
+    fun openGithubRepository() {
+        try {
+            if (onOpenGithubRepository != null) {
+                onOpenGithubRepository()
+            } else {
+                context.startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(RINES_GITHUB_REPOSITORY)
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            // The app remains usable if no browser is available.
+        }
     }
 
     Scaffold(
@@ -258,7 +283,9 @@ fun SettingsScreen(
                 )
 
                 TextButton(
-                    onClick = onOpenGithubRepository,
+                    onClick = {
+                        openGithubRepository()
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("VISIT GITHUB REPOSITORY")
