@@ -1,3 +1,4 @@
+
 package com.rines.esp32c3flasher
 
 import android.content.Intent
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Usb
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,7 +27,6 @@ import com.rines.esp32c3flasher.usb.UsbPermissionManager
 import com.rines.esp32c3flasher.usb.UsbDeviceReceiver
 import com.rines.esp32c3flasher.update.GitHubUpdateChecker
 import com.rines.esp32c3flasher.update.ReleaseInfo
-import com.rines.esp32c3flasher.update.UpdateSettings
 import com.rines.esp32c3flasher.update.VersionComparator
 import com.rines.esp32c3flasher.update.ApkInstaller
 import com.rines.esp32c3flasher.ui.theme.RinesTheme
@@ -38,15 +39,60 @@ import com.rines.esp32c3flasher.ui.components.FlashLogsCard
 import kotlinx.coroutines.launch
 import java.io.File
 
+private const val GITHUB_REPOSITORY =
+    "https://github.com/rines1126-dotcom/RINES-ESP32-C3-FLASHER-STANDALONE"
+
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            RinesTheme(
-                darkTheme = AppPreferences.isDarkMode(this@MainActivity)
-            ) {
-                RinesFlasherScreen()
+
+            var darkMode by remember {
+                mutableStateOf(
+                    AppPreferences.isDarkMode(this@MainActivity)
+                )
+            }
+
+            var keepScreenAwake by remember {
+                mutableStateOf(
+                    AppPreferences.isKeepScreenAwake(this@MainActivity)
+                )
+            }
+
+            SideEffect {
+                if (keepScreenAwake) {
+                    window.addFlags(
+                        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    )
+                } else {
+                    window.clearFlags(
+                        android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    )
+                }
+            }
+
+            RinesTheme(darkTheme = darkMode) {
+
+                RinesFlasherScreen(
+                    darkMode = darkMode,
+                    onDarkModeChange = { enabled ->
+                        darkMode = enabled
+                        AppPreferences.setDarkMode(
+                            this@MainActivity,
+                            enabled
+                        )
+                    },
+                    keepScreenAwake = keepScreenAwake,
+                    onKeepScreenAwakeChange = { enabled ->
+                        keepScreenAwake = enabled
+                        AppPreferences.setKeepScreenAwake(
+                            this@MainActivity,
+                            enabled
+                        )
+                    }
+                )
             }
         }
     }
@@ -55,16 +101,35 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RinesFlasherScreen(
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
+    keepScreenAwake: Boolean,
+    onKeepScreenAwakeChange: (Boolean) -> Unit,
     vm: FlashViewModel = viewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by vm.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
-    var devices by remember { mutableStateOf(emptyList<UsbDeviceInfo>()) }
-    var eraseSize by remember { mutableStateOf("4194304") }
-    var showEraseDialog by remember { mutableStateOf(false) }
-    var exportMessage by remember { mutableStateOf("") }
+    var showSettings by remember {
+        mutableStateOf(false)
+    }
+
+    var devices by remember {
+        mutableStateOf(emptyList<UsbDeviceInfo>())
+    }
+
+    var eraseSize by remember {
+        mutableStateOf("4194304")
+    }
+
+    var showEraseDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var exportMessage by remember {
+        mutableStateOf("")
+    }
 
     var pendingUsbDevice by remember {
         mutableStateOf<UsbDevice?>(null)
@@ -90,7 +155,9 @@ fun RinesFlasherScreen(
     }
 
     var updateStatus by remember {
-        mutableStateOf("Tap Check for Updates to check for a new version.")
+        mutableStateOf(
+            "Tap Check for Updates to check for a new version."
+        )
     }
 
     var isCheckingUpdate by remember {
@@ -118,7 +185,8 @@ fun RinesFlasherScreen(
         val manager = UsbPermissionManager(context) { device, granted ->
             if (granted && device != null) {
                 vm.connect(device)
-                exportMessage = "USB permission granted. Connecting to device..."
+                exportMessage =
+                    "USB permission granted. Connecting to device..."
             } else {
                 exportMessage =
                     "USB permission denied. Allow USB access and try again."
@@ -154,7 +222,9 @@ fun RinesFlasherScreen(
                 }
             },
             onDeviceChanged = {
-                val scannedDevices = UsbDeviceScanner.scan(context)
+                val scannedDevices =
+                    UsbDeviceScanner.scan(context)
+
                 devices = scannedDevices
 
                 val currentKeys = scannedDevices.map {
@@ -207,13 +277,16 @@ fun RinesFlasherScreen(
             downloadProgress = 0
 
             try {
-                val release = GitHubUpdateChecker.fetchLatestRelease()
+                val release =
+                    GitHubUpdateChecker.fetchLatestRelease()
+
                 latestRelease = release
 
-                val hasUpdate = VersionComparator.isUpdateAvailable(
-                    installedVersion,
-                    release.tagName
-                )
+                val hasUpdate =
+                    VersionComparator.isUpdateAvailable(
+                        installedVersion,
+                        release.tagName
+                    )
 
                 updateStatus = when {
                     release.tagName.isBlank() ->
@@ -228,6 +301,7 @@ fun RinesFlasherScreen(
                     else ->
                         "Your app is up to date. Installed: $installedVersion"
                 }
+
             } catch (e: Exception) {
                 updateStatus = "Update check failed: ${
                     e.message ?: "Unknown error"
@@ -266,12 +340,15 @@ fun RinesFlasherScreen(
 
                 downloadedApk = apkFile
                 downloadProgress = 100
-                updateStatus = "APK downloaded successfully. Ready to install."
+                updateStatus =
+                    "APK downloaded successfully. Ready to install."
+
             } catch (e: Exception) {
                 downloadedApk = null
                 updateStatus = "Download failed: ${
                     e.message ?: "Unknown error"
                 }"
+
             } finally {
                 isDownloadingUpdate = false
             }
@@ -283,7 +360,8 @@ fun RinesFlasherScreen(
         val apkFile = downloadedApk
 
         if (apkFile == null || !apkFile.exists()) {
-            updateStatus = "Downloaded APK not found. Download again."
+            updateStatus =
+                "Downloaded APK not found. Download again."
             downloadedApk = null
             return
         }
@@ -291,6 +369,7 @@ fun RinesFlasherScreen(
         try {
             ApkInstaller.installApk(context, apkFile)
             updateStatus = "Opening Android installer..."
+
         } catch (e: Exception) {
             updateStatus = "Unable to open installer: ${
                 e.message ?: "Unknown error"
@@ -298,269 +377,301 @@ fun RinesFlasherScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            "ESP32-C3",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Text(
-                            "FLASHER",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+    // OPEN GITHUB RELEASE OR REPOSITORY
+    fun openGithubPage() {
+        val url = latestRelease?.releaseUrl
+            ?.takeIf { it.isNotBlank() }
+            ?: GITHUB_REPOSITORY
+
+        try {
+            context.startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse(url)
+                )
             )
+        } catch (_: Exception) {
+            exportMessage = "Unable to open GitHub."
         }
-    ) { padding ->
+    }
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
+    // SETTINGS SCREEN
+    if (showSettings) {
 
-            // USB CONNECTION
-            item {
-                RinesSectionCard(
-                    title = "USB CONNECTION",
-                    subtitle = "Connect your ESP32-C3 device"
-                ) {
-                    RinesStatusPill(
-                        text = if (state.connected) "CONNECTED" else "DISCONNECTED",
-                        connected = state.connected
-                    )
-
-                    RinesPrimaryButton(
-                        text = "SCAN USB DEVICES",
-                        onClick = {
-                            devices = UsbDeviceScanner.scan(context)
-                        },
-                        enabled = !state.isBusy
-                    )
-
-                    devices.forEach { info ->
-                        RinesOutlineButton(
-                            text = "${info.displayName} (${info.vendorIdHex}:${info.productIdHex})",
-                            onClick = {
-                                permissionManager?.requestPermission(info.device)
-                            },
-                            enabled = !state.isBusy
-                        )
-                    }
-
-                    if (state.connected) {
-                        RinesOutlineButton(
-                            text = "DISCONNECT DEVICE",
-                            onClick = {
-                                vm.disconnect()
-                            },
-                            enabled = !state.isBusy
-                        )
-                    }
-                }
+        SettingsScreen(
+            darkMode = darkMode,
+            onDarkModeChange = onDarkModeChange,
+            keepScreenAwake = keepScreenAwake,
+            onKeepScreenAwakeChange = onKeepScreenAwakeChange,
+            installedVersion = installedVersion,
+            latestVersion = latestRelease?.tagName?.takeIf {
+                VersionComparator.isUpdateAvailable(
+                    installedVersion,
+                    it
+                ) && latestRelease?.apkUrl != null
+            },
+            updateStatus = updateStatus,
+            isChecking = isCheckingUpdate,
+            onCheckUpdates = {
+                checkForUpdates()
+            },
+            isDownloading = isDownloadingUpdate,
+            downloadProgress = downloadProgress,
+            apkDownloaded = downloadedApk != null,
+            onDownloadUpdate = {
+                downloadUpdate()
+            },
+            onInstallUpdate = {
+                installUpdate()
+            },
+            onOpenGithubRelease = {
+                openGithubPage()
+            },
+            onBack = {
+                showSettings = false
             }
+        )
 
-            // FIRMWARE
-            item {
-                RinesSectionCard(
-                    title = "FIRMWARE",
-                    subtitle = "Select and validate your firmware file"
-                ) {
-                    FirmwarePicker(
-                        onFirmwareSelected = {
-                            vm.selectFirmware(it)
-                        },
-                        onError = {
-                            exportMessage = it
-                        }
-                    )
+    } else {
 
-                    Text(
-                        state.firmwareName.ifEmpty {
-                            "No firmware selected"
-                        },
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    if (state.firmwareSize > 0) {
-                        Text("Size: ${state.firmwareSize} bytes")
-                    }
-
-                    RinesStatusPill(
-                        text = if (state.firmwareValid) {
-                            "FIRMWARE VALID"
-                        } else {
-                            "NOT VALIDATED"
-                        },
-                        connected = state.firmwareValid
-                    )
-                }
-            }
-
-            // FLASH OPERATIONS
-            item {
-                RinesSectionCard(
-                    title = "FLASH OPERATIONS",
-                    subtitle = "ESP32-C3 programming controls"
-                ) {
-                    RinesPrimaryButton(
-                        text = "SYNC ESP32-C3",
-                        onClick = {
-                            vm.synchronize()
-                        },
-                        enabled = state.connected && !state.isBusy,
-                        leadingIcon = Icons.Outlined.Usb
-                    )
-
-                    RinesPrimaryButton(
-                        text = "FLASH FIRMWARE",
-                        onClick = {
-                            vm.flashFirmware()
-                        },
-                        enabled = state.connected &&
-                            state.firmwareValid &&
-                            !state.isBusy
-                    )
-
-                    RinesOutlineButton(
-                        text = "ERASE FLASH",
-                        onClick = {
-                            showEraseDialog = true
-                        },
-                        enabled = state.connected && !state.isBusy
-                    )
-
-                    RinesOutlineButton(
-                        text = "VERIFY FIRMWARE",
-                        onClick = {
-                            vm.verifyFirmware()
-                        },
-                        enabled = state.connected &&
-                            state.firmwareValid &&
-                            !state.isBusy
-                    )
-                }
-            }
-
-            // FLASH PROGRESS
-            item {
-                FlashProgressCard(
-                    progress = state.progress,
-                    status = state.message,
-                    isBusy = state.isBusy
-                )
-            }
-
-            // FLASH LOGS
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FlashLogsCard(
-                        logs = state.logs.map { log ->
-                            "[${log.timestamp}] [${log.level}] ${log.message}"
-                        },
-                        onClearLogs = {
-                            vm.clearLogs()
-                            exportMessage = ""
-                        },
-                        onExportLogs = {
-                            val exported = FlashLogExporter.export(
-                                context,
-                                state.logs.joinToString("\n") {
-                                    "[${it.timestamp}] [${it.level}] ${it.message}"
-                                }
+        // HOME SCREEN
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                "ESP32-C3",
+                                style = MaterialTheme.typography.titleLarge
                             )
 
-                            exportMessage = if (exported) {
-                                "Log sharing opened."
-                            } else {
-                                "Unable to export logs."
+                            Text(
+                                "FLASHER",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                showSettings = true
                             }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Settings"
+                            )
                         }
-                    )
+                    }
+                )
+            }
+        ) { padding ->
 
-                    if (exportMessage.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+
+                // USB CONNECTION
+                item {
+                    RinesSectionCard(
+                        title = "USB CONNECTION",
+                        subtitle = "Connect your ESP32-C3 device"
+                    ) {
+                        RinesStatusPill(
+                            text = if (state.connected) {
+                                "CONNECTED"
+                            } else {
+                                "DISCONNECTED"
+                            },
+                            connected = state.connected
+                        )
+
+                        RinesPrimaryButton(
+                            text = "SCAN USB DEVICES",
+                            onClick = {
+                                devices =
+                                    UsbDeviceScanner.scan(context)
+                            },
+                            enabled = !state.isBusy
+                        )
+
+                        devices.forEach { info ->
+                            RinesOutlineButton(
+                                text = "${info.displayName} (${info.vendorIdHex}:${info.productIdHex})",
+                                onClick = {
+                                    permissionManager?.requestPermission(
+                                        info.device
+                                    )
+                                },
+                                enabled = !state.isBusy
+                            )
+                        }
+
+                        if (state.connected) {
+                            RinesOutlineButton(
+                                text = "DISCONNECT DEVICE",
+                                onClick = {
+                                    vm.disconnect()
+                                },
+                                enabled = !state.isBusy
+                            )
+                        }
+                    }
+                }
+
+                // FIRMWARE
+                item {
+                    RinesSectionCard(
+                        title = "FIRMWARE",
+                        subtitle = "Select and validate your firmware file"
+                    ) {
+                        FirmwarePicker(
+                            onFirmwareSelected = {
+                                vm.selectFirmware(it)
+                            },
+                            onError = {
+                                exportMessage = it
+                            }
+                        )
+
                         Text(
-                            text = exportMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            state.firmwareName.ifEmpty {
+                                "No firmware selected"
+                            },
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        if (state.firmwareSize > 0) {
+                            Text(
+                                "Size: ${state.firmwareSize} bytes"
+                            )
+                        }
+
+                        RinesStatusPill(
+                            text = if (state.firmwareValid) {
+                                "FIRMWARE VALID"
+                            } else {
+                                "NOT VALIDATED"
+                            },
+                            connected = state.firmwareValid
                         )
                     }
                 }
-            }
 
-            // SETTINGS AND UPDATES
-            item {
-                UpdateSettings(
-                    installedVersion = installedVersion,
-                    updateStatus = updateStatus,
-                    isChecking = isCheckingUpdate,
-                    onCheckUpdates = {
-                        checkForUpdates()
-                    },
-                    latestVersion = latestRelease?.tagName?.takeIf {
-                        VersionComparator.isUpdateAvailable(
-                            installedVersion,
-                            it
-                        ) && latestRelease?.apkUrl != null
-                    },
-                    isDownloading = isDownloadingUpdate,
-                    downloadProgress = downloadProgress,
-                    apkDownloaded = downloadedApk != null,
-                    onDownloadUpdate = {
-                        downloadUpdate()
-                    },
-                    onInstallUpdate = {
-                        installUpdate()
+                // FLASH OPERATIONS
+                item {
+                    RinesSectionCard(
+                        title = "FLASH OPERATIONS",
+                        subtitle = "ESP32-C3 programming controls"
+                    ) {
+                        RinesPrimaryButton(
+                            text = "SYNC ESP32-C3",
+                            onClick = {
+                                vm.synchronize()
+                            },
+                            enabled = state.connected && !state.isBusy,
+                            leadingIcon = Icons.Outlined.Usb
+                        )
+
+                        RinesPrimaryButton(
+                            text = "FLASH FIRMWARE",
+                            onClick = {
+                                vm.flashFirmware()
+                            },
+                            enabled = state.connected &&
+                                state.firmwareValid &&
+                                !state.isBusy
+                        )
+
+                        RinesOutlineButton(
+                            text = "ERASE FLASH",
+                            onClick = {
+                                showEraseDialog = true
+                            },
+                            enabled = state.connected && !state.isBusy
+                        )
+
+                        RinesOutlineButton(
+                            text = "VERIFY FIRMWARE",
+                            onClick = {
+                                vm.verifyFirmware()
+                            },
+                            enabled = state.connected &&
+                                state.firmwareValid &&
+                                !state.isBusy
+                        )
                     }
-                )
+                }
 
-                val release = latestRelease
-
-                if (
-                    release?.apkUrl != null &&
-                    VersionComparator.isUpdateAvailable(
-                        installedVersion,
-                        release.tagName
-                    )
-                ) {
-                    Spacer(Modifier.height(8.dp))
-
-                    RinesOutlineButton(
-                        text = "OPEN GITHUB RELEASE",
-                        onClick = {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(release.releaseUrl)
-                            )
-                            context.startActivity(intent)
-                        }
+                // FLASH PROGRESS
+                item {
+                    FlashProgressCard(
+                        progress = state.progress,
+                        status = state.message,
+                        isBusy = state.isBusy
                     )
                 }
-            }
 
-            // FOOTER
-            item {
-                Text(
-                    "RINES • Independent ESP32-C3 Flasher",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // FLASH LOGS
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FlashLogsCard(
+                            logs = state.logs.map { log ->
+                                "[${log.timestamp}] [${log.level}] ${log.message}"
+                            },
+                            onClearLogs = {
+                                vm.clearLogs()
+                                exportMessage = ""
+                            },
+                            onExportLogs = {
+                                val exported = FlashLogExporter.export(
+                                    context,
+                                    state.logs.joinToString("\n") {
+                                        "[${it.timestamp}] [${it.level}] ${it.message}"
+                                    }
+                                )
+
+                                exportMessage = if (exported) {
+                                    "Log sharing opened."
+                                } else {
+                                    "Unable to export logs."
+                                }
+                            }
+                        )
+
+                        if (exportMessage.isNotEmpty()) {
+                            Text(
+                                text = exportMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // FOOTER
+                item {
+                    Text(
+                        "RINES • Independent ESP32-C3 Flasher",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 
     // USB DEVICE DETECTED DIALOG
     pendingUsbDevice?.let { device ->
+
         AlertDialog(
             onDismissRequest = {
                 pendingUsbDevice = null
@@ -604,6 +715,7 @@ fun RinesFlasherScreen(
 
     // ERASE DIALOG
     if (showEraseDialog) {
+
         AlertDialog(
             onDismissRequest = {
                 showEraseDialog = false
