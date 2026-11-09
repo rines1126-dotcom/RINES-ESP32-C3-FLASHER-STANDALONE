@@ -1,0 +1,126 @@
+
+name: RINES ESP32-C3 Automatic Signed Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Publish Signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set Up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install Android SDK Packages
+        run: |
+          set -e
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Set Up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Generate Version Number
+        run: |
+          PATCH=$((GITHUB_RUN_NUMBER + 1))
+          CODE=$((GITHUB_RUN_NUMBER + 2))
+
+          echo "APP_VERSION_NAME=1.0.${PATCH}" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=${CODE}" >> "$GITHUB_ENV"
+
+          echo "Building version 1.0.${PATCH}"
+          echo "Version code: ${CODE}"
+
+      - name: Decode Android Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+
+          echo "$KEYSTORE_BASE64" | base64 --decode \
+            > "$RUNNER_TEMP/rines-release.jks"
+
+          test -s "$RUNNER_TEMP/rines-release.jks"
+
+          keytool -list \
+            -keystore "$RUNNER_TEMP/rines-release.jks" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS"
+
+      - name: Build Signed Release APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/rines-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ env.APP_VERSION_CODE }}
+          ANDROID_VERSION_NAME: ${{ env.APP_VERSION_NAME }}
+        run: |
+          gradle --version
+          gradle :app:assembleRelease --stacktrace
+
+      - name: Verify APK Signature
+        run: |
+          set -e
+          APK="app/build/outputs/apk/release/app-release.apk"
+
+          test -s "$APK"
+          apksigner verify --verbose "$APK"
+
+          echo "APK signature verification successful."
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RINES-ESP32-C3-FLASHER-${{ env.APP_VERSION_NAME }}
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION_NAME }}
+          name: RINES ESP32-C3 FLASHER v${{ env.APP_VERSION_NAME }}
+          body: |
+            RINES ESP32-C3 FLASHER
+
+            Version: ${{ env.APP_VERSION_NAME }}
+            Version Code: ${{ env.APP_VERSION_CODE }}
+
+            Automatically generated signed APK.
+          files: app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true
+          make_latest: true
