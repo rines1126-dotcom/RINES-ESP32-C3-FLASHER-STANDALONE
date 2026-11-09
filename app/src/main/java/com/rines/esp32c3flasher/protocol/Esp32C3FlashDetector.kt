@@ -1,3 +1,4 @@
+
 package com.rines.esp32c3flasher.protocol
 
 data class FlashIdResult(
@@ -125,7 +126,7 @@ class Esp32C3FlashDetector(
             // Set 8-bit JEDEC command: 0x9F.
             val usr2Result = registers.writeRegister(
                 SPI_USR2,
-                (COMMAND_LENGTH - 1L shl 28) or JEDEC_RDID.toLong()
+                ((COMMAND_LENGTH - 1L) shl 28) or JEDEC_RDID.toLong()
             )
 
             if (!usr2Result.success) {
@@ -146,14 +147,14 @@ class Esp32C3FlashDetector(
                 errorMessage = startResult.message
                 return FlashIdResult(
                     success = false,
-                    message = "SPI transaction failed to start: $errorMessage"
+                    message = "SPI transaction failed to start: ${startResult.message}"
                 )
             }
 
             // Wait until SPI transaction completes.
             var completed = false
 
-            repeat(MAX_POLL_ATTEMPTS) {
+            for (attempt in 0 until MAX_POLL_ATTEMPTS) {
                 val status = registers.readRegister(SPI_CMD)
 
                 if (!status.success || status.value == null) {
@@ -166,10 +167,12 @@ class Esp32C3FlashDetector(
 
                 if ((status.value and SPI_CMD_USR) == 0L) {
                     completed = true
-                    return@repeat
+                    break
                 }
 
-                Thread.sleep(1)
+                if (attempt < MAX_POLL_ATTEMPTS - 1) {
+                    Thread.sleep(1)
+                }
             }
 
             if (!completed) {
