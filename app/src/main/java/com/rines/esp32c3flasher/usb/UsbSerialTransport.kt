@@ -76,7 +76,7 @@ class UsbSerialTransport(context: Context) {
                     UsbSerialPort.PARITY_NONE
                 )
 
-                // Match the working fork's USB serial configuration.
+                // Keep DTR and RTS disabled for ESP32-C3 manual boot control.
                 port.dtr = false
                 port.rts = false
 
@@ -117,12 +117,18 @@ class UsbSerialTransport(context: Context) {
             return false
         }
 
+        if (timeout <= 0) {
+            lastError = "Invalid USB write timeout."
+            return false
+        }
+
         return try {
             port.write(
                 data,
-                timeout.coerceAtLeast(WRITE_TIMEOUT_MS)
+                timeout.coerceAtLeast(1)
             )
 
+            lastError = ""
             true
 
         } catch (error: Exception) {
@@ -145,6 +151,16 @@ class UsbSerialTransport(context: Context) {
             return null
         }
 
+        if (bufferSize <= 0) {
+            lastError = "Invalid USB read buffer size."
+            return null
+        }
+
+        if (timeout <= 0) {
+            lastError = "Invalid USB read timeout."
+            return null
+        }
+
         return try {
             val buffer = ByteArray(bufferSize)
             val bytesRead = port.read(buffer, timeout)
@@ -152,6 +168,7 @@ class UsbSerialTransport(context: Context) {
             if (bytesRead <= 0) {
                 ByteArray(0)
             } else {
+                lastError = ""
                 buffer.copyOf(bytesRead)
             }
 
