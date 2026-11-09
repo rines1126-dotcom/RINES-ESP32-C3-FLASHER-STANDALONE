@@ -158,9 +158,10 @@ class Esp32C3FlashWriter(
 
             bytesWritten += actualLength
 
+            // Keep progress below 100% until FLASH_END succeeds.
             val progress =
-                ((bytesWritten.toLong() * 100L) /
-                    firmwareSizeLong).toInt()
+                (((bytesWritten.toLong() * 100L) /
+                    firmwareSizeLong).toInt()).coerceAtMost(99)
 
             progressCallback(
                 progress,
@@ -168,7 +169,6 @@ class Esp32C3FlashWriter(
             )
         }
 
-        // One 32-bit word:
         // 0 = reboot, 1 = remain in download mode.
         val endPayload = Esp32C3Command.intToBytesLE(
             if (reboot) 0 else 1
@@ -191,9 +191,9 @@ class Esp32C3FlashWriter(
         progressCallback(
             100,
             if (reboot) {
-                "Firmware written. Device reboot requested."
+                "FLASH COMPLETE — Device reboot requested."
             } else {
-                "Firmware written. Device remains in bootloader mode."
+                "FLASH COMPLETE — Device remains in bootloader mode."
             }
         )
 
