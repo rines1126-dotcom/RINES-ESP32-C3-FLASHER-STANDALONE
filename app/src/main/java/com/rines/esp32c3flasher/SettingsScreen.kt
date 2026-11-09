@@ -19,6 +19,8 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.ScreenLockPortrait
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,7 +59,8 @@ fun SettingsScreen(
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onOpenGithubRelease: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenGithubRepository: () -> Unit = onOpenGithubRelease
 ) {
     var showPrivacyPolicy by remember {
         mutableStateOf(false)
@@ -165,11 +168,13 @@ fun SettingsScreen(
                     onInstallUpdate = onInstallUpdate
                 )
 
-                TextButton(
-                    onClick = onOpenGithubRelease,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("OPEN GITHUB RELEASE")
+                if (latestVersion != null) {
+                    TextButton(
+                        onClick = onOpenGithubRelease,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("OPEN GITHUB RELEASE")
+                    }
                 }
             }
 
@@ -253,7 +258,7 @@ fun SettingsScreen(
                 )
 
                 TextButton(
-                    onClick = onOpenGithubRelease,
+                    onClick = onOpenGithubRepository,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("VISIT GITHUB REPOSITORY")
@@ -284,9 +289,7 @@ fun SettingsScreen(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        "RINES ESP32-C3 FLASHER"
-                    )
+                    Text("RINES ESP32-C3 FLASHER")
 
                     Text(
                         "USB Connection\n" +
@@ -333,9 +336,9 @@ private fun SettingsSection(
     icon: @Composable () -> Unit,
     content: @Composable () -> Unit
 ) {
-    androidx.compose.material3.Card(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
+        colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
