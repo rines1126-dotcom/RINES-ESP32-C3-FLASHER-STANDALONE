@@ -12,18 +12,20 @@ data class Esp32C3Response(
     val isResponse: Boolean
         get() = direction == Esp32C3Command.RESPONSE_DIRECTION
 
-    // ESP ROM response:
-    // Status and error are the last two payload bytes.
+    // ESP32-C3 ROM response:
+    // Last four payload bytes:
+    // [Status] [Error] [Reserved] [Reserved]
+
     val status: Int?
-        get() = if (data.size >= 2) {
-            data[data.size - 2].toInt() and 0xFF
+        get() = if (data.size >= 4) {
+            data[data.size - 4].toInt() and 0xFF
         } else {
             null
         }
 
     val errorCode: Int?
-        get() = if (data.size >= 2) {
-            data[data.size - 1].toInt() and 0xFF
+        get() = if (data.size >= 4) {
+            data[data.size - 3].toInt() and 0xFF
         } else {
             null
         }
@@ -43,7 +45,7 @@ data class Esp32C3Response(
 object Esp32C3ResponseParser {
 
     private const val HEADER_SIZE = 8
-    private const val MAX_DATA_LENGTH = 0xFFFF
+    private const val MIN_ROM_STATUS_SIZE = 4
 
     fun parse(packet: ByteArray): Esp32C3Response? {
 
@@ -62,7 +64,7 @@ object Esp32C3ResponseParser {
             (packet[2].toInt() and 0xFF) or
                 ((packet[3].toInt() and 0xFF) shl 8)
 
-        if (dataLength > MAX_DATA_LENGTH) {
+        if (dataLength < MIN_ROM_STATUS_SIZE) {
             return null
         }
 
