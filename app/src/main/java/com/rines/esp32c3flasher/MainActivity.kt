@@ -1,4 +1,3 @@
-
 package com.rines.esp32c3flasher
 
 import android.content.Intent
@@ -44,7 +43,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            RinesTheme {
+            RinesTheme(
+                darkTheme = AppPreferences.isDarkMode(this@MainActivity)
+            ) {
                 RinesFlasherScreen()
             }
         }
