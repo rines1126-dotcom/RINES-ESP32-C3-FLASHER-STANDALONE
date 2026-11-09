@@ -25,6 +25,12 @@ class UsbSerialTransport(context: Context) {
     var lastError: String = ""
         private set
 
+    companion object {
+        private const val BAUD_RATE = 115200
+        private const val WRITE_TIMEOUT_MS = 5000
+        private const val DEFAULT_READ_TIMEOUT_MS = 1000
+    }
+
     @Synchronized
     fun connect(device: UsbDevice): Boolean {
         disconnect()
@@ -38,10 +44,7 @@ class UsbSerialTransport(context: Context) {
 
             val driver = UsbSerialProber
                 .getDefaultProber()
-                .findAllDrivers(usbManager)
-                .firstOrNull {
-                    it.device.deviceId == device.deviceId
-                }
+                .probeDevice(device)
 
             if (driver == null) {
                 lastError = "No compatible USB serial driver found."
@@ -67,11 +70,15 @@ class UsbSerialTransport(context: Context) {
                 port.open(connection)
 
                 port.setParameters(
-                    115200,
+                    BAUD_RATE,
                     8,
                     UsbSerialPort.STOPBITS_1,
                     UsbSerialPort.PARITY_NONE
                 )
+
+                // Match the working fork's USB serial configuration.
+                port.dtr = false
+                port.rts = false
 
                 usbConnection = connection
                 serialPort = port
@@ -101,7 +108,7 @@ class UsbSerialTransport(context: Context) {
     @Synchronized
     fun write(
         data: ByteArray,
-        timeout: Int = 1000
+        timeout: Int = WRITE_TIMEOUT_MS
     ): Boolean {
         val port = serialPort
 
@@ -111,11 +118,17 @@ class UsbSerialTransport(context: Context) {
         }
 
         return try {
-            port.write(data, timeout)
+            port.write(
+                data,
+                timeout.coerceAtLeast(WRITE_TIMEOUT_MS)
+            )
+
             true
+
         } catch (error: Exception) {
             lastError = error.message
                 ?: "USB write failed."
+
             false
         }
     }
@@ -123,7 +136,7 @@ class UsbSerialTransport(context: Context) {
     @Synchronized
     fun read(
         bufferSize: Int = 4096,
-        timeout: Int = 1000
+        timeout: Int = DEFAULT_READ_TIMEOUT_MS
     ): ByteArray? {
         val port = serialPort
 
@@ -145,6 +158,7 @@ class UsbSerialTransport(context: Context) {
         } catch (error: Exception) {
             lastError = error.message
                 ?: "USB read failed."
+
             null
         }
     }
