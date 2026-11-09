@@ -76,13 +76,25 @@ class Esp32C3RomClient(
 
         val startTime = SystemClock.elapsedRealtime()
 
-        while (
-            SystemClock.elapsedRealtime() - startTime < timeoutMs
-        ) {
+        while (true) {
+
+            val elapsedTime =
+                SystemClock.elapsedRealtime() - startTime
+
+            val remainingTime = timeoutMs - elapsedTime
+
+            if (remainingTime <= 0) {
+                break
+            }
+
+            val readTimeout = remainingTime
+                .coerceAtMost(200L)
+                .toInt()
+                .coerceAtLeast(1)
 
             val incoming = transport.read(
                 bufferSize = 1024,
-                timeout = 200
+                timeout = readTimeout
             ) ?: return RomCommandResult(
                 false,
                 "USB read failed: ${transport.lastError}"
