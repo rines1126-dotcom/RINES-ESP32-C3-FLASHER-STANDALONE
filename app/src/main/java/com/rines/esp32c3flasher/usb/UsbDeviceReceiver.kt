@@ -8,8 +8,8 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 
 class UsbDeviceReceiver(
-    private val onDeviceChanged: () -> Unit,
-    private val onDeviceAttached: (UsbDevice?) -> Unit = {}
+    private val onDeviceAttached: (UsbDevice?) -> Unit = {},
+    private val onDeviceChanged: () -> Unit
 ) : BroadcastReceiver() {
 
     @Suppress("DEPRECATION")
@@ -19,7 +19,6 @@ class UsbDeviceReceiver(
                 val device = intent.getParcelableExtra<UsbDevice>(
                     UsbManager.EXTRA_DEVICE
                 )
-
                 onDeviceAttached(device)
                 onDeviceChanged()
             }
