@@ -26,38 +26,67 @@ class FlashOperationStateManager {
     fun getState(): FlashOperationState = currentState
 
     fun connecting() {
-        update(FlashOperationStatus.CONNECTING, 0, "Connecting to ESP32-C3...")
+        update(
+            FlashOperationStatus.CONNECTING,
+            0,
+            "Connecting to ESP32-C3..."
+        )
     }
 
     fun syncing() {
-        update(FlashOperationStatus.SYNCING, 0, "Synchronizing with ESP32-C3...")
+        update(
+            FlashOperationStatus.SYNCING,
+            0,
+            "Synchronizing with ESP32-C3..."
+        )
     }
 
     fun flashing(progress: Int, message: String) {
         update(
             FlashOperationStatus.FLASHING,
-            progress.coerceIn(0, 100),
+            progress.coerceIn(0, 99),
             message
         )
     }
 
     fun erasing() {
-        update(FlashOperationStatus.ERASING, 0, "Erasing flash...")
+        update(
+            FlashOperationStatus.ERASING,
+            0,
+            "Erasing flash..."
+        )
     }
 
     fun verifying() {
-        update(FlashOperationStatus.VERIFYING, 0, "Verifying firmware...")
+        update(
+            FlashOperationStatus.VERIFYING,
+            0,
+            "Verifying firmware..."
+        )
     }
 
     fun success(message: String) {
-        update(FlashOperationStatus.SUCCESS, 100, message)
+        update(
+            FlashOperationStatus.SUCCESS,
+            100,
+            message
+        )
     }
 
     fun error(message: String) {
-        update(FlashOperationStatus.ERROR, 0, message)
+        update(
+            FlashOperationStatus.ERROR,
+            0,
+            message
+        )
     }
 
     fun reset() {
+        // Preserve successful operation results after USB disconnect.
+        if (currentState.status == FlashOperationStatus.SUCCESS) {
+            return
+        }
+
         currentState = FlashOperationState()
     }
 
