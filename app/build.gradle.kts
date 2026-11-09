@@ -1,14 +1,20 @@
 
-val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "release-keystore.jks"
-val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
-val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS") ?: ""
-val keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "release-keystore.jks"
+val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+val keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+
+val automaticVersionCode = System.getenv("ANDROID_VERSION_CODE")
+    ?.toIntOrNull() ?: 3
+
+val automaticVersionName = System.getenv("ANDROID_VERSION_NAME")
+    ?: "1.0.2"
 
 android {
     namespace = "com.rines.esp32c3flasher"
@@ -18,8 +24,9 @@ android {
         applicationId = "com.rines.esp32c3flasher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+
+        versionCode = automaticVersionCode
+        versionName = automaticVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,6 +44,7 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
