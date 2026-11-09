@@ -4,6 +4,7 @@ package com.rines.esp32c3flasher.firmware
 enum class FlashOperationStatus {
     IDLE,
     CONNECTING,
+    CONNECTED,
     SYNCING,
     FLASHING,
     ERASING,
@@ -30,6 +31,15 @@ class FlashOperationStateManager {
             FlashOperationStatus.CONNECTING,
             0,
             "Connecting to ESP32-C3..."
+        )
+    }
+
+    // USB connected is not the same as flash completed.
+    fun ready(message: String) {
+        update(
+            FlashOperationStatus.CONNECTED,
+            0,
+            message
         )
     }
 
@@ -82,11 +92,6 @@ class FlashOperationStateManager {
     }
 
     fun reset() {
-        // Preserve successful operation results after USB disconnect.
-        if (currentState.status == FlashOperationStatus.SUCCESS) {
-            return
-        }
-
         currentState = FlashOperationState()
     }
 
