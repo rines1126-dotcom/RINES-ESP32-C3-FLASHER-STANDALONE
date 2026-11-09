@@ -36,21 +36,21 @@ jobs:
           sdkmanager --install \
             "platforms;android-35" \
             "build-tools;35.0.0"
-
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Set Up Gradle
+      - name: Set Up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
 
       - name: Generate Version Number
+        id: version
         run: |
           PATCH=$((GITHUB_RUN_NUMBER + 1))
           CODE=$((GITHUB_RUN_NUMBER + 2))
 
-          echo "APP_VERSION_NAME=1.0.${PATCH}" >> "$GITHUB_ENV"
-          echo "APP_VERSION_CODE=${CODE}" >> "$GITHUB_ENV"
+          echo "name=1.0.${PATCH}" >> "$GITHUB_OUTPUT"
+          echo "code=${CODE}" >> "$GITHUB_OUTPUT"
 
           echo "Building version 1.0.${PATCH}"
           echo "Version code: ${CODE}"
@@ -63,7 +63,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -e
-
           test -n "$KEYSTORE_BASE64"
           test -n "$KEYSTORE_PASSWORD"
           test -n "$KEY_ALIAS"
@@ -85,8 +84,8 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_VERSION_CODE: ${{ env.APP_VERSION_CODE }}
-          ANDROID_VERSION_NAME: ${{ env.APP_VERSION_NAME }}
+          ANDROID_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ANDROID_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           gradle --version
           gradle :app:assembleRelease --stacktrace
@@ -95,16 +94,13 @@ jobs:
         run: |
           set -e
           APK="app/build/outputs/apk/release/app-release.apk"
-
           test -s "$APK"
           apksigner verify --verbose "$APK"
-
-          echo "APK signature verification successful."
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RINES-ESP32-C3-FLASHER-${{ env.APP_VERSION_NAME }}
+          name: RINES-ESP32-C3-FLASHER-${{ steps.version.outputs.name }}
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
@@ -112,13 +108,13 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION_NAME }}
-          name: RINES ESP32-C3 FLASHER v${{ env.APP_VERSION_NAME }}
+          tag_name: v${{ steps.version.outputs.name }}
+          name: RINES ESP32-C3 FLASHER v${{ steps.version.outputs.name }}
           body: |
             RINES ESP32-C3 FLASHER
 
-            Version: ${{ env.APP_VERSION_NAME }}
-            Version Code: ${{ env.APP_VERSION_CODE }}
+            Version: ${{ steps.version.outputs.name }}
+            Version Code: ${{ steps.version.outputs.code }}
 
             Automatically generated signed APK.
           files: app/build/outputs/apk/release/app-release.apk
