@@ -90,11 +90,21 @@ class FlashViewModel(
     }
 
     fun synchronize() {
-        if (!controller.isConnected || _uiState.value.isBusy) return
+        if (_uiState.value.isBusy) return
+
+        if (!controller.isConnected) {
+            val message =
+                "USB DEVICE NOT CONNECTED! Please connect your ESP32-C3 via USB and try again."
+
+            logManager.warning(message)
+            stateManager.error(message)
+            refreshState()
+            return
+        }
 
         viewModelScope.launch {
             stateManager.syncing()
-            logManager.info("Starting ESP32-C3 SYNC...")
+            logManager.info("SYNCING ESP32-C3...")
             refreshState()
 
             val result = withContext(Dispatchers.IO) {
@@ -102,11 +112,30 @@ class FlashViewModel(
             }
 
             if (result.success) {
-                logManager.success(result.message)
-                stateManager.success(result.message)
+                val message =
+                    "ESP32-C3 DETECTED! The device is connected and ready for flashing."
+
+                logManager.success(message)
+                stateManager.success(message)
             } else {
-                logManager.error(result.message)
-                stateManager.error(result.message)
+                val isBootloaderSyncFailure =
+                    result.message.contains(
+                        "No valid SYNC response",
+                        ignoreCase = true
+                    ) ||
+                    result.message.contains(
+                        "SYNC failed after",
+                        ignoreCase = true
+                    )
+
+                val message = if (isBootloaderSyncFailure) {
+                    "ESP32-C3 NOT IN DOWNLOAD MODE! Please press and hold the BOOT button, then connect the USB cable. Release the BOOT button once connected, then try SYNC again."
+                } else {
+                    "SYNC FAILED! ${result.message}"
+                }
+
+                logManager.error(message)
+                stateManager.error(message)
             }
 
             refreshState()
@@ -133,7 +162,6 @@ class FlashViewModel(
                     stateManager.flashing(progress, message)
                     logManager.info(message)
 
-                    // Publish progress safely on the main thread.
                     viewModelScope.launch {
                         refreshState()
                     }
@@ -196,11 +224,11 @@ class FlashViewModel(
             }
 
             if (result.success) {
-                stateManager.success(result.message)
                 logManager.success(result.message)
+                stateManager.success(result.message)
             } else {
-                stateManager.error(result.message)
                 logManager.error(result.message)
+                stateManager.error(result.message)
             }
 
             refreshState()
