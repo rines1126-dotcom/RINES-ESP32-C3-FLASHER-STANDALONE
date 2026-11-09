@@ -3,6 +3,7 @@ package com.rines.esp32c3flasher
 
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
@@ -12,6 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Usb
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -62,6 +65,14 @@ fun RinesFlasherScreen(
     var showEraseDialog by remember { mutableStateOf(false) }
     var exportMessage by remember { mutableStateOf("") }
 
+    var pendingUsbDevice by remember {
+        mutableStateOf<UsbDevice?>(null)
+    }
+
+    var promptedDeviceKey by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var permissionManager by remember {
         mutableStateOf<UsbPermissionManager?>(null)
     }
@@ -106,6 +117,10 @@ fun RinesFlasherScreen(
         val manager = UsbPermissionManager(context) { device, granted ->
             if (granted && device != null) {
                 vm.connect(device)
+                exportMessage = "USB permission granted. Connecting to device..."
+            } else {
+                exportMessage =
+                    "USB permission denied. Allow USB access and try again."
             }
         }
 
@@ -125,9 +140,35 @@ fun RinesFlasherScreen(
 
     // USB ATTACH / DETACH
     DisposableEffect(context) {
-        val receiver = UsbDeviceReceiver {
-            devices = UsbDeviceScanner.scan(context)
-        }
+        val receiver = UsbDeviceReceiver(
+            onDeviceAttached = { device ->
+                if (device != null) {
+                    val deviceKey =
+                        "${device.deviceName}_${device.vendorId}_${device.productId}"
+
+                    if (promptedDeviceKey != deviceKey) {
+                        promptedDeviceKey = deviceKey
+                        pendingUsbDevice = device
+                    }
+                }
+            },
+            onDeviceChanged = {
+                val scannedDevices = UsbDeviceScanner.scan(context)
+                devices = scannedDevices
+
+                val currentKeys = scannedDevices.map {
+                    "${it.device.deviceName}_${it.device.vendorId}_${it.device.productId}"
+                }.toSet()
+
+                if (
+                    promptedDeviceKey != null &&
+                    promptedDeviceKey !in currentKeys
+                ) {
+                    promptedDeviceKey = null
+                    pendingUsbDevice = null
+                }
+            }
+        )
 
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -262,7 +303,7 @@ fun RinesFlasherScreen(
                 title = {
                     Column {
                         Text(
-                            "RINES ESP32-C3",
+                            "ESP32-C3",
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
@@ -373,7 +414,8 @@ fun RinesFlasherScreen(
                         onClick = {
                             vm.synchronize()
                         },
-                        enabled = state.connected && !state.isBusy
+                        enabled = state.connected && !state.isBusy,
+                        leadingIcon = Icons.Outlined.Usb
                     )
 
                     RinesPrimaryButton(
@@ -483,7 +525,8 @@ fun RinesFlasherScreen(
 
                 val release = latestRelease
 
-                if (release?.apkUrl != null &&
+                if (
+                    release?.apkUrl != null &&
                     VersionComparator.isUpdateAvailable(
                         installedVersion,
                         release.tagName
@@ -513,6 +556,49 @@ fun RinesFlasherScreen(
                 )
             }
         }
+    }
+
+    // USB DEVICE DETECTED DIALOG
+    pendingUsbDevice?.let { device ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingUsbDevice = null
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.Usb,
+                    contentDescription = "USB device"
+                )
+            },
+            title = {
+                Text("USB DEVICE DETECTED")
+            },
+            text = {
+                Text(
+                    "An ESP32-C3 USB device has been connected.\n\n" +
+                        "Would you like to connect to this device?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingUsbDevice = null
+                        permissionManager?.requestPermission(device)
+                    }
+                ) {
+                    Text("CONNECT")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingUsbDevice = null
+                    }
+                ) {
+                    Text("NOT NOW")
+                }
+            }
+        )
     }
 
     // ERASE DIALOG
@@ -546,7 +632,8 @@ fun RinesFlasherScreen(
                     onClick = {
                         val size = eraseSize.toLongOrNull()
 
-                        if (size != null &&
+                        if (
+                            size != null &&
                             size > 0 &&
                             size % 4096L == 0L
                         ) {
