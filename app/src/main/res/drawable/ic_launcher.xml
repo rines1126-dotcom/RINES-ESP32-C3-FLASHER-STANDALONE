@@ -1,0 +1,63 @@
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- White square background -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- ESP32-C3 chip body -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M29,27h50v54h-50z" />
+
+    <!-- Chip inner border -->
+    <path
+        android:fillColor="#263D50"
+        android:pathData="M34,32h40v44h-40z" />
+
+    <!-- ESP32 chip core -->
+    <path
+        android:fillColor="#00D9FF"
+        android:pathData="M39,37h30v34h-30z" />
+
+    <!-- Circuit core -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M47,45h14v18h-14z" />
+
+    <!-- Circuit connection lines -->
+    <path
+        android:fillColor="#00D9FF"
+        android:pathData="M52,40h4v5h-4z M52,63h4v5h-4z M40,51h7v4h-7z M61,51h7v4h-7z" />
+
+    <!-- Left pins -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M19,33h10v5h-10z M19,45h10v5h-10z M19,57h10v5h-10z M19,69h10v5h-10z" />
+
+    <!-- Right pins -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M79,33h10v5h-10z M79,45h10v5h-10z M79,57h10v5h-10z M79,69h10v5h-10z" />
+
+    <!-- Top pins -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M37,17h5v10h-5z M51,17h5v10h-5z M65,17h5v10h-5z" />
+
+    <!-- Bottom pins -->
+    <path
+        android:fillColor="#17212B"
+        android:pathData="M37,81h5v10h-5z M51,81h5v10h-5z M65,81h5v10h-5z" />
+
+    <!-- Center circuit indicator -->
+    <path
+        android:fillColor="#00E5A8"
+        android:pathData="M50,51h8v6h-8z" />
+
+</vector>
