@@ -65,6 +65,7 @@ class FlashViewModel(
         refreshState()
     }
 
+    // USB CONNECTION
     fun connect(device: UsbDevice) {
         if (_uiState.value.isBusy) return
 
@@ -79,7 +80,12 @@ class FlashViewModel(
 
             if (result.success) {
                 logManager.success(result.message)
-                stateManager.success(result.message)
+
+                // USB connection is not a completed flash operation.
+                stateManager.ready(
+                    "ESP32-C3 USB device connected. Ready to SYNC."
+                )
+
             } else {
                 logManager.error(result.message)
                 stateManager.error(result.message)
@@ -89,6 +95,7 @@ class FlashViewModel(
         }
     }
 
+    // SYNC
     fun synchronize() {
         if (_uiState.value.isBusy) return
 
@@ -117,6 +124,7 @@ class FlashViewModel(
 
                 logManager.success(message)
                 stateManager.success(message)
+
             } else {
                 val isBootloaderSyncFailure =
                     result.message.contains(
@@ -142,6 +150,7 @@ class FlashViewModel(
         }
     }
 
+    // FLASH FIRMWARE
     fun flashFirmware() {
         if (
             !controller.isConnected ||
@@ -153,7 +162,11 @@ class FlashViewModel(
             ?: return
 
         viewModelScope.launch {
-            stateManager.flashing(0, "Starting firmware flash...")
+            stateManager.flashing(
+                0,
+                "Starting firmware flash..."
+            )
+
             logManager.info("Starting firmware flash...")
             refreshState()
 
@@ -180,6 +193,7 @@ class FlashViewModel(
         }
     }
 
+    // VERIFY FIRMWARE
     fun verifyFirmware() {
         if (
             !controller.isConnected ||
@@ -211,6 +225,7 @@ class FlashViewModel(
         }
     }
 
+    // ERASE FLASH
     fun eraseFlash(sizeBytes: Long) {
         if (!controller.isConnected || _uiState.value.isBusy) return
 
@@ -235,7 +250,10 @@ class FlashViewModel(
         }
     }
 
+    // DISCONNECT
     fun disconnect() {
+        if (_uiState.value.isBusy) return
+
         viewModelScope.launch(Dispatchers.IO) {
             controller.disconnect()
 
@@ -247,6 +265,7 @@ class FlashViewModel(
         }
     }
 
+    // CLEAR LOGS
     fun clearLogs() {
         logManager.clear()
         refreshState()
