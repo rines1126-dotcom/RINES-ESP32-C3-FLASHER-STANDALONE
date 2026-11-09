@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Flash log files -->
     <cache-path
         name="flash_logs"
         path="flash_logs/" />
 
+    <!-- Downloaded APK update files -->
     <cache-path
         name="updates"
         path="updates/" />
