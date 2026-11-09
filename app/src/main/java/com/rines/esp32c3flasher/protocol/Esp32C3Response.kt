@@ -9,25 +9,21 @@ data class Esp32C3Response(
     val data: ByteArray
 ) {
 
-    companion object {
-        private const val ROM_STATUS_SIZE = 4
-    }
-
     val isResponse: Boolean
         get() = direction == Esp32C3Command.RESPONSE_DIRECTION
 
-    // ESP32-C3 ROM response:
-    // [status, error, reserved, reserved]
+    // ESP ROM response:
+    // Status and error are the last two payload bytes.
     val status: Int?
-        get() = if (data.size >= ROM_STATUS_SIZE) {
-            data[data.size - 4].toInt() and 0xFF
+        get() = if (data.size >= 2) {
+            data[data.size - 2].toInt() and 0xFF
         } else {
             null
         }
 
     val errorCode: Int?
-        get() = if (data.size >= ROM_STATUS_SIZE) {
-            data[data.size - 3].toInt() and 0xFF
+        get() = if (data.size >= 2) {
+            data[data.size - 1].toInt() and 0xFF
         } else {
             null
         }
