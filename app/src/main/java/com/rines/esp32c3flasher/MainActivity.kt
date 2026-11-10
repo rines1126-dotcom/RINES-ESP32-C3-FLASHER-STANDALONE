@@ -7,54 +7,93 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rines.esp32c3flasher.firmware.*
-import com.rines.esp32c3flasher.usb.UsbDeviceInfo
-import com.rines.esp32c3flasher.usb.UsbDeviceScanner
-import com.rines.esp32c3flasher.usb.UsbPermissionManager
-import com.rines.esp32c3flasher.usb.UsbDeviceReceiver
-import com.rines.esp32c3flasher.update.GitHubUpdateChecker
-import com.rines.esp32c3flasher.update.ReleaseInfo
-import com.rines.esp32c3flasher.update.UpdateSettings
-import com.rines.esp32c3flasher.update.VersionComparator
-import com.rines.esp32c3flasher.update.ApkInstaller
-import com.rines.esp32c3flasher.ui.theme.RinesTheme
+import com.rines.esp32c3flasher.firmware.FlashLogExporter
+import com.rines.esp32c3flasher.firmware.FlashViewModel
+import com.rines.esp32c3flasher.firmware.FirmwarePicker
+import com.rines.esp32c3flasher.ui.components.FlashLogsCard
+import com.rines.esp32c3flasher.ui.components.FlashProgressCard
+import com.rines.esp32c3flasher.ui.components.RinesOutlineButton
+import com.rines.esp32c3flasher.ui.components.RinesPrimaryButton
 import com.rines.esp32c3flasher.ui.components.RinesSectionCard
 import com.rines.esp32c3flasher.ui.components.RinesStatusPill
-import com.rines.esp32c3flasher.ui.components.RinesPrimaryButton
-import com.rines.esp32c3flasher.ui.components.RinesOutlineButton
-import com.rines.esp32c3flasher.ui.components.FlashProgressCard
-import com.rines.esp32c3flasher.ui.components.FlashLogsCard
+import com.rines.esp32c3flasher.ui.theme.RinesTheme
+import com.rines.esp32c3flasher.update.ApkInstaller
+import com.rines.esp32c3flasher.update.GitHubUpdateChecker
+import com.rines.esp32c3flasher.update.ReleaseInfo
+import com.rines.esp32c3flasher.update.VersionComparator
+import com.rines.esp32c3flasher.usb.UsbDeviceInfo
+import com.rines.esp32c3flasher.usb.UsbDeviceReceiver
+import com.rines.esp32c3flasher.usb.UsbDeviceScanner
+import com.rines.esp32c3flasher.usb.UsbPermissionManager
 import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            RinesTheme {
-                RinesFlasherScreen()
+            var darkMode by remember {
+                mutableStateOf(AppPreferences.isDarkMode(this@MainActivity))
+            }
+
+            RinesTheme(darkTheme = darkMode) {
+                RinesFlasherScreen(
+                    darkMode = darkMode,
+                    onDarkModeChange = { enabled ->
+                        AppPreferences.setDarkMode(this@MainActivity, enabled)
+                        darkMode = enabled
+                    }
+                )
             }
         }
     }
@@ -88,7 +127,7 @@ private fun GlowingEsp32Title() {
         text = "ESP32-C3",
         style = MaterialTheme.typography.titleLarge.copy(
             color = glowColor,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            fontWeight = FontWeight.Bold,
             shadow = Shadow(
                 color = glowColor.copy(alpha = 0.95f),
                 blurRadius = glowRadius,
@@ -101,9 +140,11 @@ private fun GlowingEsp32Title() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RinesFlasherScreen(
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
     vm: FlashViewModel = viewModel()
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val state by vm.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -112,6 +153,10 @@ fun RinesFlasherScreen(
     var showEraseDialog by remember { mutableStateOf(false) }
     var exportMessage by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+
+    var keepScreenAwake by remember {
+        mutableStateOf(AppPreferences.isKeepScreenAwake(context))
+    }
 
     var permissionManager by remember {
         mutableStateOf<UsbPermissionManager?>(null)
@@ -132,24 +177,22 @@ fun RinesFlasherScreen(
         mutableStateOf("Tap Check for Updates to check for a new version.")
     }
 
-    var isCheckingUpdate by remember {
-        mutableStateOf(false)
-    }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var latestRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
+    var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableIntStateOf(0) }
+    var downloadedApk by remember { mutableStateOf<File?>(null) }
 
-    var latestRelease by remember {
-        mutableStateOf<ReleaseInfo?>(null)
-    }
-
-    var isDownloadingUpdate by remember {
-        mutableStateOf(false)
-    }
-
-    var downloadProgress by remember {
-        mutableIntStateOf(0)
-    }
-
-    var downloadedApk by remember {
-        mutableStateOf<File?>(null)
+    // APPLY KEEP SCREEN AWAKE SETTING
+    SideEffect {
+        val activity = context as? ComponentActivity
+        activity?.window?.let { window ->
+            if (keepScreenAwake) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
     }
 
     // USB PERMISSION MANAGER
@@ -204,7 +247,7 @@ fun RinesFlasherScreen(
         }
     }
 
-    // CHECK UPDATES
+    // CHECK FOR UPDATES
     fun checkForUpdates() {
         if (isCheckingUpdate || isDownloadingUpdate) return
 
@@ -238,9 +281,7 @@ fun RinesFlasherScreen(
                         "Your app is up to date. Installed: $installedVersion"
                 }
             } catch (e: Exception) {
-                updateStatus = "Update check failed: ${
-                    e.message ?: "Unknown error"
-                }"
+                updateStatus = "Update check failed: ${e.message ?: "Unknown error"}"
             } finally {
                 isCheckingUpdate = false
             }
@@ -278,9 +319,7 @@ fun RinesFlasherScreen(
                 updateStatus = "APK downloaded successfully. Ready to install."
             } catch (e: Exception) {
                 downloadedApk = null
-                updateStatus = "Download failed: ${
-                    e.message ?: "Unknown error"
-                }"
+                updateStatus = "Download failed: ${e.message ?: "Unknown error"}"
             } finally {
                 isDownloadingUpdate = false
             }
@@ -301,45 +340,79 @@ fun RinesFlasherScreen(
             ApkInstaller.installApk(context, apkFile)
             updateStatus = "Opening Android installer..."
         } catch (e: Exception) {
-            updateStatus = "Unable to open installer: ${
-                e.message ?: "Unknown error"
-            }"
+            updateStatus = "Unable to open installer: ${e.message ?: "Unknown error"}"
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        if (showSettings) {
-                            Text(
-                                "SETTINGS",
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                        } else {
-                            GlowingEsp32Title()
-                        }
+    // OPEN GITHUB RELEASE
+    fun openGithubRelease() {
+        val releaseUrl = latestRelease?.releaseUrl ?: return
 
-                        Text(
-                            if (showSettings) "APP PREFERENCES" else "FLASHER",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                navigationIcon = {
-                    if (showSettings) {
-                        IconButton(onClick = { showSettings = false }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = "Back to flashing"
+        try {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl))
+            )
+        } catch (_: Exception) {
+            updateStatus = "Unable to open GitHub release page."
+        }
+    }
+
+    // OPEN GITHUB REPOSITORY
+    fun openGithubRepository() {
+        try {
+            context.startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://github.com/rines1126-dotcom/RINES-ESP32-C3-FLASHER-STANDALONE")
+                )
+            )
+        } catch (_: Exception) {
+            updateStatus = "Unable to open GitHub repository."
+        }
+    }
+
+    if (showSettings) {
+        SettingsScreen(
+            darkMode = darkMode,
+            onDarkModeChange = onDarkModeChange,
+            keepScreenAwake = keepScreenAwake,
+            onKeepScreenAwakeChange = { enabled ->
+                AppPreferences.setKeepScreenAwake(context, enabled)
+                keepScreenAwake = enabled
+            },
+            installedVersion = installedVersion,
+            latestVersion = latestRelease?.tagName?.takeIf {
+                VersionComparator.isUpdateAvailable(installedVersion, it) &&
+                    latestRelease?.apkUrl != null
+            },
+            updateStatus = updateStatus,
+            isChecking = isCheckingUpdate,
+            onCheckUpdates = { checkForUpdates() },
+            isDownloading = isDownloadingUpdate,
+            downloadProgress = downloadProgress,
+            apkDownloaded = downloadedApk != null,
+            onDownloadUpdate = { downloadUpdate() },
+            onInstallUpdate = { installUpdate() },
+            onOpenGithubRelease = { openGithubRelease() },
+            onBack = { showSettings = false },
+            onOpenGithubRepository = { openGithubRepository() }
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            GlowingEsp32Title()
+
+                            Text(
+                                "FLASHER",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
-                    }
-                },
-                actions = {
-                    if (!showSettings) {
+                    },
+                    actions = {
                         IconButton(onClick = { showSettings = true }) {
                             Icon(
                                 imageVector = Icons.Outlined.Settings,
@@ -347,19 +420,16 @@ fun RinesFlasherScreen(
                             )
                         }
                     }
-                }
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            if (!showSettings) {
-                // HOME: FLASHING PROCESS ONLY
+                )
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 item {
                     RinesSectionCard(
                         title = "USB CONNECTION",
@@ -372,7 +442,9 @@ fun RinesFlasherScreen(
 
                         RinesPrimaryButton(
                             text = "SCAN USB DEVICES",
-                            onClick = { devices = UsbDeviceScanner.scan(context) },
+                            onClick = {
+                                devices = UsbDeviceScanner.scan(context)
+                            },
                             enabled = !state.isBusy
                         )
 
@@ -509,67 +581,6 @@ fun RinesFlasherScreen(
                         }
                     }
                 }
-            } else {
-                // SETTINGS: UPDATE AND APP INFORMATION
-                item {
-                    UpdateSettings(
-                        installedVersion = installedVersion,
-                        updateStatus = updateStatus,
-                        isChecking = isCheckingUpdate,
-                        onCheckUpdates = { checkForUpdates() },
-                        latestVersion = latestRelease?.tagName?.takeIf {
-                            VersionComparator.isUpdateAvailable(
-                                installedVersion,
-                                it
-                            ) && latestRelease?.apkUrl != null
-                        },
-                        isDownloading = isDownloadingUpdate,
-                        downloadProgress = downloadProgress,
-                        apkDownloaded = downloadedApk != null,
-                        onDownloadUpdate = { downloadUpdate() },
-                        onInstallUpdate = { installUpdate() }
-                    )
-
-                    val release = latestRelease
-
-                    if (
-                        release?.apkUrl != null &&
-                        VersionComparator.isUpdateAvailable(
-                            installedVersion,
-                            release.tagName
-                        )
-                    ) {
-                        Spacer(Modifier.height(8.dp))
-
-                        RinesOutlineButton(
-                            text = "OPEN GITHUB RELEASE",
-                            onClick = {
-                                val intent = Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse(release.releaseUrl)
-                                )
-                                context.startActivity(intent)
-                            }
-                        )
-                    }
-                }
-
-                item {
-                    RinesSectionCard(
-                        title = "APP INFORMATION",
-                        subtitle = "About this application"
-                    ) {
-                        Text("RINES ESP32-C3 FLASHER")
-                        Text("Installed Version: $installedVersion")
-                        Text("Developer: RINES")
-
-                        Text(
-                            "Independent ESP32-C3 Flasher",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
             }
         }
     }
@@ -585,9 +596,7 @@ fun RinesFlasherScreen(
             },
             text = {
                 Column {
-                    Text(
-                        "Enter erase size in bytes. Must be a multiple of 4096."
-                    )
+                    Text("Enter erase size in bytes. Must be a multiple of 4096.")
 
                     OutlinedTextField(
                         value = eraseSize,
@@ -605,16 +614,11 @@ fun RinesFlasherScreen(
                     onClick = {
                         val size = eraseSize.toLongOrNull()
 
-                        if (
-                            size != null &&
-                            size > 0 &&
-                            size % 4096L == 0L
-                        ) {
+                        if (size != null && size > 0 && size % 4096L == 0L) {
                             vm.eraseFlash(size)
                             showEraseDialog = false
                         } else {
-                            exportMessage =
-                                "Enter a valid multiple of 4096."
+                            exportMessage = "Enter a valid multiple of 4096."
                         }
                     }
                 ) {
